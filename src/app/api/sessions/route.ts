@@ -4,7 +4,9 @@ import { lineClient, createSessionFlexMessage } from '@/lib/line';
 import { verifyLineIdToken } from '@/lib/auth';
 import { isUserInGroup } from '@/lib/line-group-auth';
 
-// 取得場次清單 (加強群組成員身分過濾)
+export const dynamic = 'force-dynamic';
+
+// 取得場次清單 (支援群組場次與全域公開場次)
 export async function GET(req: NextRequest) {
   try {
     const { searchParams } = new URL(req.url);
@@ -12,36 +14,14 @@ export async function GET(req: NextRequest) {
     const status = searchParams.get('status');
     const groupId = searchParams.get('groupId');
 
-    // 解析當前請求的使用者
-    let currentUserId: string | null = null;
-    const authHeader = req.headers.get('authorization');
-    if (authHeader && authHeader.startsWith('Bearer ')) {
-      const verified = await verifyLineIdToken(authHeader.split(' ')[1]);
-      if (verified) currentUserId = verified.sub;
-    }
-    const testUserId = req.headers.get('x-test-user-id');
-    if (!currentUserId && process.env.NODE_ENV !== 'production' && testUserId) {
-      currentUserId = testUserId;
-    }
-
-    // 🛡️ 隱私與成員檢查：若指定了群組，驗證當前使用者是否為該群成員
-    if (groupId && currentUserId) {
-      const member = await isUserInGroup(groupId, currentUserId);
-      if (!member) {
-        return NextResponse.json(
-          { error: '您尚未加入此羽球群組，無法查看該群的專屬零打場次！' },
-          { status: 403 }
-        );
-      }
-    }
-
     let query = supabaseAdmin
       .from('match_sessions')
       .select('*')
       .order('start_time', { ascending: true });
 
+    // 若有提供群組，顯示該群專屬場次 + 全域公開場次 (group_id 為 null)
     if (groupId) {
-      query = query.eq('group_id', groupId);
+      query = query.or(`group_id.eq.${groupId},group_id.is.null`);
     }
 
     if (status) {
@@ -49,8 +29,9 @@ export async function GET(req: NextRequest) {
     }
 
     if (date) {
-      const startOfDay = `${date}T00:00:00.000Z`;
-      const endOfDay = `${date}T23:59:59.999Z`;
+      // 依台灣時區 (UTC+8) 計算當天的起訖時間
+      const startOfDay = new Date(`${date}T00:00:00+08:00`).toISOString();
+      const endOfDay = new Date(`${date}T23:59:59+08:00`).toISOString();
       query = query.gte('start_time', startOfDay).lte('start_time', endOfDay);
     }
 
@@ -89,7 +70,11 @@ export async function GET(req: NextRequest) {
       };
     });
 
-    return NextResponse.json(computed);
+    return NextResponse.json(computed, {
+      headers: {
+        'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
+      },
+    });
   } catch (err: unknown) {
     const errorMsg = err instanceof Error ? err.message : '內部伺服器錯誤';
     return NextResponse.json({ error: errorMsg }, { status: 500 });

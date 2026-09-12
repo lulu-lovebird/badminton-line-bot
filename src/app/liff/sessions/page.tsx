@@ -2,94 +2,61 @@
 
 import React, { useState, useEffect, useRef, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { Calendar, MapPin, Users, DollarSign, Award, CheckCircle, AlertCircle, Clock } from 'lucide-react';
+import { Calendar, MapPin, DollarSign, Award, CheckCircle, AlertCircle, Clock, RefreshCw, Globe } from 'lucide-react';
 import { MatchSession } from '@/types/database';
-import { initLiff } from '@/lib/liff-client';
+import { useLiff } from '@/components/liff-provider';
 
 function SessionListContent() {
   const searchParams = useSearchParams();
-  const groupId = searchParams.get('groupId') || '';
+  const [currentGroupId, setCurrentGroupId] = useState<string>(searchParams.get('groupId') || '');
 
   const [sessions, setSessions] = useState<MatchSession[]>([]);
   const [loading, setLoading] = useState(true);
-  const [userProfile, setUserProfile] = useState<{ userId: string; displayName: string } | null>(null);
-  const [idToken, setIdToken] = useState<string>('');
   const [selectedDate, setSelectedDate] = useState<string>('');
   const [partySize, setPartySize] = useState<number>(1);
   const [submittingId, setSubmittingId] = useState<string | null>(null);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
-  // 🛡️ 防跳閃終極安全鎖：保證整個頁面載入期間只執行一次 setup 與 fetchSessions
-  const initializedRef = useRef(false);
+  const { userProfile, idToken } = useLiff();
 
-  useEffect(() => {
-    if (initializedRef.current) return;
-    initializedRef.current = true;
-
-    async function setup() {
-      try {
-        const liff = await initLiff();
-        if (liff && liff.isLoggedIn()) {
-          const profile = await liff.getProfile();
-          const token = liff.getIDToken() || '';
-          setIdToken(token);
-          setUserProfile({
-            userId: profile.userId,
-            displayName: profile.displayName,
-          });
-        } else {
-          setUserProfile({
-            userId: 'U_guest_player',
-            displayName: '球友',
-          });
-        }
-      } catch (err) {
-        console.warn('LIFF 載入提示:', err);
-      } finally {
-        fetchSessionsInitial();
-      }
-    }
-
-    async function fetchSessionsInitial() {
-      try {
-        const params = new URLSearchParams();
-        if (groupId) params.append('groupId', groupId);
-        const qs = params.toString() ? `?${params.toString()}` : '';
-
-        const res = await fetch(`/api/sessions${qs}`);
-        if (res.ok) {
-          const data = await res.json();
-          setSessions(Array.isArray(data) ? data : []);
-        }
-      } catch (err) {
-        console.error('查詢場次失敗:', err);
-      } finally {
-        setLoading(false);
-      }
-    }
-
-    setup();
-  }, []); // 👈 空依賴陣列，確保只在載入時執行一次，杜絕 URL 變動造成的循環刷新！
-
-  async function fetchSessionsByDate(date: string) {
+  // 取得場次 (強制 no-store 杜絕快取問題)
+  async function fetchSessions(dateFilter = selectedDate, groupFilter = currentGroupId) {
     setLoading(true);
     try {
       const params = new URLSearchParams();
-      if (groupId) params.append('groupId', groupId);
-      if (date) params.append('date', date);
+      if (groupFilter) params.append('groupId', groupFilter);
+      if (dateFilter) params.append('date', dateFilter);
+      // 加入隨機時間戳徹底打碎瀏覽器與 CDN 快取
+      params.append('_t', Date.now().toString());
 
-      const qs = params.toString() ? `?${params.toString()}` : '';
-      const res = await fetch(`/api/sessions${qs}`);
+      const res = await fetch(`/api/sessions?${params.toString()}`, {
+        cache: 'no-store',
+        headers: {
+          'Cache-Control': 'no-cache',
+        },
+      });
+
       if (res.ok) {
         const data = await res.json();
         setSessions(Array.isArray(data) ? data : []);
+      } else {
+        const errData = await res.json().catch(() => ({}));
+        console.error('查詢場次異常:', res.status, errData);
       }
     } catch (err) {
-      console.error(err);
+      console.error('查詢場次網路錯誤:', err);
     } finally {
       setLoading(false);
     }
   }
+
+  // 首次載入
+  const hasFetchedRef = useRef(false);
+  useEffect(() => {
+    if (hasFetchedRef.current) return;
+    hasFetchedRef.current = true;
+    fetchSessions();
+  }, []);
 
   const handleRegister = async (session: MatchSession) => {
     if (!userProfile) {
@@ -132,7 +99,7 @@ function SessionListContent() {
         });
       }
 
-      fetchSessionsByDate(selectedDate);
+      fetchSessions();
     } catch (err: unknown) {
       const errorMsg = err instanceof Error ? err.message : '報名時發生錯誤';
       setMessage({ type: 'error', text: errorMsg });
@@ -142,14 +109,25 @@ function SessionListContent() {
   };
 
   return (
-    <main className="min-h-screen bg-slate-50 p-4 pb-20 max-w-md mx-auto">
+    <main className="min-h-screen bg-slate-50 p-4 pb-24 max-w-md mx-auto">
       {/* 頁頭 */}
       <div className="bg-emerald-600 text-white p-4 rounded-2xl shadow-sm mb-4">
-        <h1 className="text-xl font-bold flex items-center gap-2">
-          🏸 開放零打場次報名
-        </h1>
+        <div className="flex items-center justify-between">
+          <h1 className="text-xl font-bold flex items-center gap-2">
+            🏸 開放零打場次報名
+          </h1>
+          <button
+            onClick={() => fetchSessions()}
+            disabled={loading}
+            className="p-1.5 rounded-lg bg-white/20 hover:bg-white/30 active:scale-95 transition-all text-xs flex items-center gap-1"
+            title="重新整理場次"
+          >
+            <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
+            <span>重新整理</span>
+          </button>
+        </div>
         <p className="text-emerald-100 text-xs mt-1">
-          {groupId ? '本群專屬零打場次清單' : '近期開放零打場次'}
+          {currentGroupId ? '本群專屬與公開零打場次' : '近期開放零打場次'}
         </p>
         {userProfile && (
           <div className="mt-2 text-xs bg-emerald-700/60 px-2 py-1 rounded inline-block">
@@ -184,14 +162,14 @@ function SessionListContent() {
             value={selectedDate}
             onChange={(e) => {
               setSelectedDate(e.target.value);
-              fetchSessionsByDate(e.target.value);
+              fetchSessions(e.target.value);
             }}
           />
           {selectedDate && (
             <button
               onClick={() => {
                 setSelectedDate('');
-                fetchSessionsByDate('');
+                fetchSessions('');
               }}
               className="text-xs text-slate-500 hover:text-slate-800 underline"
             >
@@ -203,10 +181,37 @@ function SessionListContent() {
 
       {/* 場次列表 */}
       {loading ? (
-        <div className="text-center py-12 text-slate-400 text-sm">載入場次中...</div>
+        <div className="text-center py-16 text-slate-400 text-xs flex flex-col items-center gap-2">
+          <RefreshCw size={22} className="animate-spin text-emerald-500" />
+          <span>正在即時載入場次列表...</span>
+        </div>
       ) : sessions.length === 0 ? (
-        <div className="text-center py-12 bg-white rounded-xl border border-slate-200 text-slate-500 text-sm">
-          目前暫無開放中的零打場次
+        <div className="text-center py-12 px-4 bg-white rounded-2xl border border-slate-200 text-slate-500 space-y-3">
+          <div className="text-sm font-medium">目前暫無開放中的零打場次</div>
+          <p className="text-xs text-slate-400">
+            {selectedDate ? `日期 ${selectedDate} 當日無開團` : '近期尚無團主開團'}
+          </p>
+          <div className="pt-2 flex justify-center gap-2">
+            <button
+              onClick={() => fetchSessions()}
+              className="px-3 py-1.5 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 rounded-lg text-xs font-bold flex items-center gap-1"
+            >
+              <RefreshCw size={13} />
+              重新整理
+            </button>
+            {currentGroupId && (
+              <button
+                onClick={() => {
+                  setCurrentGroupId('');
+                  fetchSessions(selectedDate, '');
+                }}
+                className="px-3 py-1.5 bg-slate-100 text-slate-700 hover:bg-slate-200 rounded-lg text-xs font-medium flex items-center gap-1"
+              >
+                <Globe size={13} />
+                查看全域所有場次
+              </button>
+            )}
+          </div>
         </div>
       ) : (
         <div className="space-y-4">
@@ -317,7 +322,7 @@ function SessionListContent() {
 
 export default function SessionListPage() {
   return (
-    <Suspense fallback={<div className="p-4 text-center text-xs text-slate-400">載入中...</div>}>
+    <Suspense fallback={<div className="p-8 text-center text-xs text-slate-400">載入場次中...</div>}>
       <SessionListContent />
     </Suspense>
   );
