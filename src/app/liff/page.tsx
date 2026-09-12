@@ -104,6 +104,28 @@ function LiffHubContent() {
           <span className="text-xs font-bold bg-white/20 px-2 py-1 rounded-lg">前往 →</span>
         </Link>
 
+        {/* 👑 系統最高管理員專屬入口 (僅 Super Admin 可見) */}
+        {(userProfile?.is_super_admin || userProfile?.role === 'admin') && (
+          <Link
+            href={`/liff/super-admin${groupQuery}`}
+            className="w-full p-4 bg-gradient-to-r from-purple-800 via-indigo-800 to-slate-900 hover:from-purple-900 hover:to-black text-white rounded-2xl shadow-md flex items-center justify-between transition-transform active:scale-95 border border-purple-400/30 animate-in fade-in"
+          >
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center text-purple-200">
+                <Shield size={22} />
+              </div>
+              <div className="text-left">
+                <div className="font-bold text-sm flex items-center gap-1.5">
+                  <span>系統最高管理後台</span>
+                  <span className="text-[10px] px-1.5 py-0.5 bg-purple-500/40 rounded text-purple-200 font-medium">Super Admin</span>
+                </div>
+                <div className="text-[11px] text-purple-200">群組授權開通 • 團主身分審核與管理</div>
+              </div>
+            </div>
+            <span className="text-xs font-bold bg-white/20 px-2 py-1 rounded-lg text-purple-100">管理 →</span>
+          </Link>
+        )}
+
         {/* 系統除錯診斷 (僅在 DEBUG=on 時顯示) */}
         {process.env.NEXT_PUBLIC_DEBUG === 'on' && (
           <Link

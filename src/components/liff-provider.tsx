@@ -8,6 +8,7 @@ export interface LiffUserProfile {
   displayName: string;
   pictureUrl?: string;
   role?: string;
+  is_super_admin?: boolean;
 }
 
 interface LiffContextType {
@@ -84,11 +85,16 @@ export function LiffProvider({ children }: { children: React.ReactNode }) {
                   if (userData && !userData.error && isMounted) {
                     setUserProfile((prev) =>
                       prev
-                        ? { ...prev, role: userData.role }
+                        ? {
+                            ...prev,
+                            role: userData.role,
+                            is_super_admin: userData.is_super_admin || userData.role === 'admin',
+                          }
                         : {
                             userId: userData.line_user_id,
                             displayName: userData.display_name,
                             role: userData.role,
+                            is_super_admin: userData.is_super_admin || userData.role === 'admin',
                           }
                     );
                   }

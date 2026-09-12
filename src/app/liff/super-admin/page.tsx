@@ -1,7 +1,8 @@
 'use client';
 
 import React, { useState, useEffect, Suspense } from 'react';
-import { Shield, Users, Layers, Power, LogOut, CheckCircle, XCircle, RefreshCw, AlertTriangle, Key } from 'lucide-react';
+import Link from 'next/link';
+import { Shield, Users, Layers, Power, LogOut, CheckCircle, XCircle, RefreshCw, AlertTriangle, Key, ArrowLeft } from 'lucide-react';
 import { User, Group } from '@/types/database';
 import { initLiff } from '@/lib/liff-client';
 
@@ -15,6 +16,7 @@ function SuperAdminContent() {
   const [debugInfo, setDebugInfo] = useState<any>(null);
 
   useEffect(() => {
+    document.title = '👑 系統最高管理後台';
     initAuth();
   }, []);
 
@@ -209,6 +211,22 @@ function SuperAdminContent() {
 
   return (
     <main className="min-h-screen bg-slate-100 p-4 pb-20 max-w-lg mx-auto text-slate-800">
+      {/* 頂部導航列 */}
+      <div className="flex items-center justify-between mb-3 px-1">
+        <Link
+          href="/liff"
+          className="text-xs text-slate-500 hover:text-slate-800 flex items-center gap-1 font-medium"
+        >
+          <span>← 返回 JuJu 大廳</span>
+        </Link>
+        <Link
+          href="/liff/admin"
+          className="inline-flex items-center gap-1 px-2.5 py-1 bg-white hover:bg-slate-50 text-slate-700 rounded-lg text-[11px] font-bold border border-slate-200 shadow-2xs transition-colors"
+        >
+          <span>🏸 前往團主後台</span>
+        </Link>
+      </div>
+
       <div className="bg-slate-900 text-white p-4 rounded-2xl shadow-sm mb-4">
         <h1 className="text-lg font-bold flex items-center gap-2">
           <Shield size={20} className="text-amber-400" /> 系統最高管理後台

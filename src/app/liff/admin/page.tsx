@@ -1,8 +1,9 @@
 'use client';
 
 import React, { useState, useEffect, Suspense } from 'react';
+import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
-import { PlusCircle, Users, CheckCircle, Clock, MapPin, Send, AlertCircle, RefreshCw, ShieldAlert, Key, Copy } from 'lucide-react';
+import { PlusCircle, Users, CheckCircle, Clock, MapPin, Send, AlertCircle, RefreshCw, ShieldAlert, Key, Copy, Shield } from 'lucide-react';
 import { MatchSession, Registration } from '@/types/database';
 import { initLiff } from '@/lib/liff-client';
 
@@ -389,6 +390,25 @@ function AdminDashboardContent() {
 
   return (
     <main className="min-h-screen bg-slate-100 p-4 pb-20 max-w-lg mx-auto text-slate-800">
+      {/* 頂部快速導航列 */}
+      <div className="flex items-center justify-between mb-3 px-1">
+        <Link
+          href={`/liff${urlGroupId ? `?groupId=${urlGroupId}` : ''}`}
+          className="text-xs text-slate-500 hover:text-slate-850 flex items-center gap-1 font-medium"
+        >
+          <span>← 返回大廳</span>
+        </Link>
+        {(userProfile?.role === 'admin' || (userProfile as any)?.is_super_admin) && (
+          <Link
+            href={`/liff/super-admin${urlGroupId ? `?groupId=${urlGroupId}` : ''}`}
+            className="inline-flex items-center gap-1.5 px-3 py-1 bg-gradient-to-r from-purple-700 to-indigo-700 hover:from-purple-800 hover:to-indigo-800 text-white rounded-xl text-xs font-bold shadow-sm transition-all"
+          >
+            <Shield size={13} className="text-purple-200" />
+            <span>👑 超級管理</span>
+          </Link>
+        )}
+      </div>
+
       <div className="flex bg-white rounded-2xl p-1 shadow-sm mb-4 border border-slate-200">
         <button
           onClick={() => {

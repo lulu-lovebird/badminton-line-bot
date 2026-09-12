@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import crypto from 'crypto';
 import { lineClient, createSessionFlexMessage } from '@/lib/line';
 import { supabaseAdmin } from '@/lib/supabase';
+import { isSuperAdmin } from '@/lib/auth';
 
 function verifySignature(body: string, signature: string, secret: string) {
   const hash = crypto
@@ -147,6 +148,87 @@ export async function POST(req: NextRequest) {
               messages: [{ type: 'text', text: '⚠️ 此群組的零打小幫手服務已被系統管理員暫停。' }],
             });
           }
+          continue;
+        }
+      }
+
+      // 關鍵字：admin / 管理員 / !admin / 超級管理 (提供 Super Admin 專屬一鍵開啟後台)
+      const adminKeywords = ['admin', '管理員', '!admin', '超級管理', 'superadmin'];
+      if (adminKeywords.includes(userText.toLowerCase())) {
+        let isSenderSuperAdmin = senderUserId ? isSuperAdmin(senderUserId) : false;
+        if (!isSenderSuperAdmin && senderUserId) {
+          const { data: dbUser } = await supabaseAdmin
+            .from('users')
+            .select('role')
+            .eq('line_user_id', senderUserId)
+            .maybeSingle();
+          if (dbUser?.role === 'admin') isSenderSuperAdmin = true;
+        }
+
+        if (isSenderSuperAdmin) {
+          const superAdminUrl = `${liffBaseUrl.replace(/\/+$/, '')}/super-admin`;
+          await lineClient.replyMessage({
+            replyToken,
+            messages: [
+              {
+                type: 'flex',
+                altText: '👑 系統最高管理後台快捷入口',
+                contents: {
+                  type: 'bubble',
+                  size: 'kilo',
+                  header: {
+                    type: 'box',
+                    layout: 'vertical',
+                    backgroundColor: '#4C1D95',
+                    paddingAll: '14px',
+                    contents: [
+                      {
+                        type: 'text',
+                        text: '👑 系統最高管理後台',
+                        weight: 'bold',
+                        color: '#FFFFFF',
+                        size: 'md',
+                      },
+                    ],
+                  },
+                  body: {
+                    type: 'box',
+                    layout: 'vertical',
+                    paddingAll: '14px',
+                    spacing: 'sm',
+                    contents: [
+                      {
+                        type: 'text',
+                        text: '✨ 管理員身分已驗證通過',
+                        size: 'xs',
+                        weight: 'bold',
+                        color: '#6D28D9',
+                      },
+                      {
+                        type: 'text',
+                        text: '點擊下方按鈕直接進入全域管理後台，可進行群組授權開通與團主身分審核。',
+                        size: 'xxs',
+                        color: '#666666',
+                        wrap: true,
+                      },
+                      {
+                        type: 'button',
+                        style: 'primary',
+                        color: '#6D28D9',
+                        height: 'sm',
+                        margin: 'md',
+                        action: {
+                          type: 'uri',
+                          label: '👉 開啟最高管理後台',
+                          uri: superAdminUrl,
+                        },
+                      },
+                    ],
+                  },
+                },
+              },
+            ],
+          });
           continue;
         }
       }
