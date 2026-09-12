@@ -1,0 +1,235 @@
+import { NextRequest, NextResponse } from 'next/server';
+import crypto from 'crypto';
+import { lineClient, createSessionFlexMessage } from '@/lib/line';
+import { supabaseAdmin } from '@/lib/supabase';
+
+// 驗證 LINE 簽名
+function verifySignature(body: string, signature: string, secret: string) {
+  const hash = crypto
+    .createHmac('SHA256', secret)
+    .update(body)
+    .digest('base64');
+  return hash === signature;
+}
+
+export async function POST(req: NextRequest) {
+  const bodyText = await req.text();
+  const signature = req.headers.get('x-line-signature') || '';
+  const channelSecret = process.env.LINE_CHANNEL_SECRET || '';
+
+  if (channelSecret && !verifySignature(bodyText, signature, channelSecret)) {
+    return NextResponse.json({ message: 'Invalid signature' }, { status: 401 });
+  }
+
+  const data = JSON.parse(bodyText);
+  const events = data.events || [];
+
+  for (const event of events) {
+    const liffBaseUrl = process.env.NEXT_PUBLIC_LIFF_URL || 'https://liff.line.me/your-liff-id';
+
+    // 1. 處理機器人被邀請加入群組事件 (join event)
+    if (event.type === 'join') {
+      const groupId = event.source.groupId || event.source.roomId;
+      if (groupId) {
+        // 嘗試取得群組名稱
+        let groupName = '羽球社團群組';
+        try {
+          const summary = await lineClient.getGroupSummary(groupId);
+          if (summary?.groupName) groupName = summary.groupName;
+        } catch {
+          // ignore
+        }
+
+        // 自動在資料庫建立群組檔案
+        await supabaseAdmin.from('groups').upsert({
+          group_id: groupId,
+          group_name: groupName,
+          is_active: true,
+        });
+
+        const welcomeLiffUrl = `${liffBaseUrl}?groupId=${groupId}`;
+
+        await lineClient.replyMessage({
+          replyToken: event.replyToken,
+          messages: [
+            {
+              type: 'flex',
+              altText: '🏸 零打小幫手已加入群組！',
+              contents: {
+                type: 'bubble',
+                header: {
+                  type: 'box',
+                  layout: 'vertical',
+                  backgroundColor: '#16A34A',
+                  contents: [
+                    {
+                      type: 'text',
+                      text: `🏸 零打小幫手報到！`,
+                      weight: 'bold',
+                      color: '#FFFFFF',
+                      size: 'md',
+                    },
+                  ],
+                },
+                body: {
+                  type: 'box',
+                  layout: 'vertical',
+                  spacing: 'sm',
+                  contents: [
+                    {
+                      type: 'text',
+                      text: `大家好！我是【${groupName}】的零打報名小幫手。`,
+                      size: 'xs',
+                      color: '#333333',
+                    },
+                    {
+                      type: 'text',
+                      text: '• 團主開場請進入後台建立場次\n• 球友點擊置頂公告或輸入「我要報名」即可登記！',
+                      size: 'xs',
+                      color: '#666666',
+                      wrap: true,
+                    },
+                  ],
+                },
+                footer: {
+                  type: 'box',
+                  layout: 'vertical',
+                  contents: [
+                    {
+                      type: 'button',
+                      style: 'primary',
+                      color: '#16A34A',
+                      height: 'sm',
+                      action: {
+                        type: 'uri',
+                        label: '👉 查看本群零打場次',
+                        uri: welcomeLiffUrl,
+                      },
+                    },
+                  ],
+                },
+              },
+            },
+          ],
+        });
+      }
+    }
+
+    // 2. 處理文字訊息
+    if (event.type === 'message' && event.message.type === 'text') {
+      const userText = event.message.text.trim();
+      const replyToken = event.replyToken;
+      const isGroup = event.source.type === 'group' || event.source.type === 'room';
+      const groupId = isGroup ? (event.source.groupId || event.source.roomId) : null;
+
+      // 🛡️ 檢查該群組是否被超級管理員停權
+      if (groupId) {
+        const { data: grp } = await supabaseAdmin
+          .from('groups')
+          .select('is_active')
+          .eq('group_id', groupId)
+          .single();
+
+        if (grp && !grp.is_active) {
+          // 若已被停權，直接靜音或提示
+          if (userText === '零打' || userText === '我要報名' || userText === '開團') {
+            await lineClient.replyMessage({
+              replyToken,
+              messages: [{ type: 'text', text: '⚠️ 此群組的零打小幫手服務已被系統管理員暫停。' }],
+            });
+          }
+          continue;
+        }
+      }
+
+      // 觸發關鍵字：零打 / 我要報名 / 開團
+      if (userText === '零打' || userText === '我要報名' || userText === '開團') {
+        const groupParam = groupId ? `?groupId=${groupId}` : '';
+        const liffUrl = `${liffBaseUrl}${groupParam}`;
+
+        if (isGroup) {
+          await lineClient.replyMessage({
+            replyToken,
+            messages: [
+              {
+                type: 'flex',
+                altText: '🏸 查看開放零打場次與報名',
+                contents: {
+                  type: 'bubble',
+                  size: 'kilo',
+                  body: {
+                    type: 'box',
+                    layout: 'vertical',
+                    paddingAll: '12px',
+                    spacing: 'sm',
+                    contents: [
+                      {
+                        type: 'text',
+                        text: '🏸 本群零打場次查詢與報名',
+                        weight: 'bold',
+                        size: 'sm',
+                        color: '#166534',
+                      },
+                      {
+                        type: 'text',
+                        text: '點擊下方按鈕即可開啟本群場次與即時報名！',
+                        size: 'xxs',
+                        color: '#666666',
+                        wrap: true,
+                      },
+                      {
+                        type: 'button',
+                        style: 'primary',
+                        color: '#16A34A',
+                        height: 'sm',
+                        action: {
+                          type: 'uri',
+                          label: '👉 開啟本群零打場次',
+                          uri: liffUrl,
+                        },
+                      },
+                    ],
+                  },
+                },
+              },
+            ],
+          });
+        } else {
+          // 私訊內：查詢全域或跨群近期開放場次
+          const now = new Date().toISOString();
+          const { data: sessions } = await supabaseAdmin
+            .from('match_sessions')
+            .select('*')
+            .gte('start_time', now)
+            .in('status', ['open', 'full'])
+            .order('start_time', { ascending: true })
+            .limit(5);
+
+          if (!sessions || sessions.length === 0) {
+            await lineClient.replyMessage({
+              replyToken,
+              messages: [{ type: 'text', text: '目前暫無開放中的零打場次，請靜待各團團主開團！🏸' }],
+            });
+          } else {
+            const flexBubbles = sessions.map((s) => createSessionFlexMessage(s, liffBaseUrl).contents);
+            await lineClient.replyMessage({
+              replyToken,
+              messages: [
+                {
+                  type: 'flex',
+                  altText: '🏸 近期開放零打場次清單',
+                  contents: {
+                    type: 'carousel',
+                    contents: flexBubbles,
+                  },
+                },
+              ],
+            });
+          }
+        }
+      }
+    }
+  }
+
+  return NextResponse.json({ status: 'ok' });
+}
