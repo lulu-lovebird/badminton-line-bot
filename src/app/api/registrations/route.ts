@@ -210,6 +210,16 @@ export async function POST(req: NextRequest) {
         .eq('id', session_id);
     }
 
+    // 確保使用者在 users 表中有紀錄（外鍵約束防護）
+    await supabaseAdmin.from('users').upsert(
+      {
+        line_user_id: targetUserId,
+        display_name: player_name || '球友',
+        role: 'member',
+      },
+      { onConflict: 'line_user_id', ignoreDuplicates: true }
+    );
+
     // 2. 插入報名紀錄
     const { data: newReg, error: rErr } = await supabaseAdmin
       .from('registrations')

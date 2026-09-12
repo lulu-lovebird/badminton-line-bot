@@ -7,6 +7,7 @@ export interface LiffUserProfile {
   userId: string;
   displayName: string;
   pictureUrl?: string;
+  role?: string;
 }
 
 interface LiffContextType {
@@ -69,6 +70,30 @@ export function LiffProvider({ children }: { children: React.ReactNode }) {
                 pictureUrl: profile.pictureUrl,
               });
               setIdToken(token);
+            }
+
+            // 🚀 關鍵：在使用者進入 LIFF App 時，立即自動向後端 /api/auth/me 註冊/同步至 users 表
+            if (token) {
+              fetch('/api/auth/me', {
+                headers: {
+                  Authorization: `Bearer ${token}`,
+                },
+              })
+                .then((res) => res.json())
+                .then((userData) => {
+                  if (userData && !userData.error && isMounted) {
+                    setUserProfile((prev) =>
+                      prev
+                        ? { ...prev, role: userData.role }
+                        : {
+                            userId: userData.line_user_id,
+                            displayName: userData.display_name,
+                            role: userData.role,
+                          }
+                    );
+                  }
+                })
+                .catch((err) => console.warn('自動同步使用者資料庫紀錄失敗:', err));
             }
           } catch (pe: any) {
             console.warn('取得 LINE 個人檔案失敗:', pe);
