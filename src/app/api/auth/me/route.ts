@@ -18,7 +18,7 @@ export async function GET(req: NextRequest) {
     }
   }
 
-  // 允許本地開發環境繞過測試
+  // 允許測試模式
   const testUserId = req.headers.get('x-test-user-id');
   if (!lineUserId && process.env.NODE_ENV !== 'production' && testUserId) {
     lineUserId = testUserId;
@@ -26,22 +26,27 @@ export async function GET(req: NextRequest) {
   }
 
   if (!lineUserId) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    return NextResponse.json({ error: '無法解析 LINE 身分 (未提供 Token 或 Token 已失效)' }, { status: 401 });
   }
 
   // 1. 檢查是否在 .env 的 SUPER_ADMIN_LINE_IDS 白名單中
   const envIsAdmin = isSuperAdmin(lineUserId);
 
   // 2. 取得使用者資料與資料庫角色
-  let { data: user } = await supabaseAdmin
+  let { data: user, error: selectErr } = await supabaseAdmin
     .from('users')
     .select('*')
     .eq('line_user_id', lineUserId)
-    .single();
+    .maybeSingle();
+
+  if (selectErr) {
+    console.error('Supabase 查詢錯誤:', selectErr);
+    return NextResponse.json({ error: `資料庫連線或查詢失敗: ${selectErr.message}` }, { status: 500 });
+  }
 
   if (!user) {
     // 第一次登入自動註冊
-    const { data: newUser } = await supabaseAdmin
+    const { data: newUser, error: insertErr } = await supabaseAdmin
       .from('users')
       .insert({
         line_user_id: lineUserId,
@@ -51,6 +56,11 @@ export async function GET(req: NextRequest) {
       })
       .select()
       .single();
+
+    if (insertErr) {
+      console.error('Supabase 新增使用者錯誤:', insertErr);
+      return NextResponse.json({ error: `資料庫新增失敗: ${insertErr.message}` }, { status: 500 });
+    }
     user = newUser;
   } else if (envIsAdmin && user.role !== 'admin') {
     // 若在 .env 中被指定為 super admin，自動同步更新資料庫角色為 admin
