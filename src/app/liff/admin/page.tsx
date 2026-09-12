@@ -2,9 +2,23 @@
 
 import React, { useState, useEffect, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { PlusCircle, Users, CheckCircle, Clock, MapPin, Send, AlertCircle, RefreshCw, ShieldAlert, Key } from 'lucide-react';
+import { PlusCircle, Users, CheckCircle, Clock, MapPin, Send, AlertCircle, RefreshCw, ShieldAlert, Key, Copy } from 'lucide-react';
 import { MatchSession, Registration } from '@/types/database';
 import { initLiff } from '@/lib/liff-client';
+
+// 輔助函式：計算時間順延天數並輸出 datetime-local 格式 (YYYY-MM-DDTHH:mm)
+function toDatetimeLocalString(dateStr: string | Date, addDays = 0): string {
+  if (!dateStr) return '';
+  const d = new Date(dateStr);
+  if (isNaN(d.getTime())) return '';
+  d.setDate(d.getDate() + addDays);
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  const hours = String(d.getHours()).padStart(2, '0');
+  const minutes = String(d.getMinutes()).padStart(2, '0');
+  return `${year}-${month}-${day}T${hours}:${minutes}`;
+}
 
 function AdminDashboardContent() {
   const searchParams = useSearchParams();
@@ -44,6 +58,35 @@ function AdminDashboardContent() {
     fee: 200,
     notes: '含空調，請自備球拍與乾淨球鞋',
   });
+
+  const [copyNotice, setCopyNotice] = useState<string | null>(null);
+
+  // 沿用舊場次並自動順延 7 天（名單全新清空）
+  function handleCopySessionToNextWeek(s: MatchSession) {
+    const newStart = toDatetimeLocalString(s.start_time, 7);
+    const newEnd = toDatetimeLocalString(s.end_time, 7);
+
+    setForm({
+      group_id: s.group_id || urlGroupId || '',
+      title: s.title,
+      match_type: s.match_type || 'double',
+      start_time: newStart,
+      end_time: newEnd,
+      location: s.location || '',
+      court_info: s.court_info || '',
+      max_players: s.max_players || 8,
+      max_waitlist: s.max_waitlist || 4,
+      level_requirement: s.level_requirement || '初中級 (4~7級)',
+      shuttlecock: s.shuttlecock || '勝利比賽球 (綠標)',
+      fee: s.fee || 200,
+      notes: s.notes || '含空調，請自備球拍與乾淨球鞋',
+    });
+
+    setCopyNotice(`已成功為您帶入「${s.title}」並自動順延 7 天至下週！報名名單已全新清空。`);
+    setActiveTab('create');
+    setSelectedSession(null);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
 
   useEffect(() => {
     checkAdminAuth();
@@ -359,7 +402,52 @@ function AdminDashboardContent() {
 
       {activeTab === 'create' && (
         <form onSubmit={handleCreateSession} className="bg-white p-5 rounded-2xl shadow-sm border border-slate-200 space-y-3">
-          <h2 className="font-bold text-base text-slate-800 border-b pb-2">新增本週零打場次</h2>
+          <div className="flex items-center justify-between border-b pb-2">
+            <h2 className="font-bold text-base text-slate-800">建立零打場次</h2>
+            <span className="text-[11px] text-slate-400">支援快速沿用舊場次</span>
+          </div>
+
+          {/* 複製成功提示橫條 */}
+          {copyNotice && (
+            <div className="p-3 bg-amber-50 border border-amber-300 rounded-xl text-xs text-amber-900 flex items-start gap-2 animate-fadeIn">
+              <CheckCircle size={16} className="text-amber-600 shrink-0 mt-0.5" />
+              <div className="flex-1 leading-relaxed font-medium">
+                {copyNotice}
+              </div>
+              <button
+                type="button"
+                onClick={() => setCopyNotice(null)}
+                className="text-amber-500 hover:text-amber-800 text-xs font-bold"
+              >
+                ✕
+              </button>
+            </div>
+          )}
+
+          {/* 歷史場次快速下拉複製器 */}
+          {sessions.length > 0 && (
+            <div className="bg-emerald-50/70 border border-emerald-200 rounded-xl p-3 flex flex-col gap-1.5">
+              <label className="text-xs font-bold text-emerald-900 flex items-center gap-1.5">
+                <Copy size={13} className="text-emerald-600" />
+                <span>快速沿用歷史場次（自動順延 +7 天並清空名單）：</span>
+              </label>
+              <select
+                className="text-xs border border-emerald-300 rounded-lg p-2 bg-white text-slate-700 outline-none focus:border-emerald-500 font-medium"
+                onChange={(e) => {
+                  const found = sessions.find((s) => s.id === e.target.value);
+                  if (found) handleCopySessionToNextWeek(found);
+                }}
+                defaultValue=""
+              >
+                <option value="" disabled>點此選擇欲沿用的舊場次...</option>
+                {sessions.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.title} ({new Date(s.start_time).toLocaleDateString('zh-TW', { weekday: 'short', month: 'numeric', day: 'numeric' })})
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
 
           {urlGroupId && (
             <div className="bg-slate-50 p-2 rounded text-xs text-slate-500">
@@ -547,8 +635,19 @@ function AdminDashboardContent() {
                     </div>
                   </div>
 
-                  <div className="mt-3 pt-2 border-t border-slate-100 flex justify-between items-center text-[11px] text-slate-400">
-                    <span>點擊進入管理球友名單、收款與廣播</span>
+                  <div className="mt-3 pt-2 border-t border-slate-100 flex justify-between items-center text-[11px]">
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleCopySessionToNextWeek(s);
+                      }}
+                      className="px-2.5 py-1 bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200 rounded-lg font-bold flex items-center gap-1 active:scale-95 transition-all text-xs"
+                      title="直接沿用此場次所有設定，順延 7 天開下週團"
+                    >
+                      <Copy size={13} className="text-amber-600" />
+                      <span>複製到下週 (+7天)</span>
+                    </button>
                     <span className="text-emerald-600 font-bold">管理名單 →</span>
                   </div>
                 </div>
@@ -560,12 +659,23 @@ function AdminDashboardContent() {
 
       {selectedSession && (
         <div className="space-y-4">
-          <button
-            onClick={() => setSelectedSession(null)}
-            className="text-xs font-bold text-emerald-600 flex items-center gap-1 hover:underline"
-          >
-            ← 返回場次總覽
-          </button>
+          <div className="flex items-center justify-between">
+            <button
+              onClick={() => setSelectedSession(null)}
+              className="text-xs font-bold text-emerald-600 flex items-center gap-1 hover:underline"
+            >
+              ← 返回場次總覽
+            </button>
+            <button
+              type="button"
+              onClick={() => handleCopySessionToNextWeek(selectedSession)}
+              className="px-3 py-1 bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-300 rounded-lg font-bold flex items-center gap-1 text-xs active:scale-95 transition-all shadow-sm"
+              title="直接沿用此場次所有設定，順延 7 天開下週團"
+            >
+              <Copy size={13} className="text-amber-600" />
+              <span>複製本場到下週 (+7天)</span>
+            </button>
+          </div>
 
           <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm">
             <h2 className="font-bold text-slate-800 text-base">{selectedSession.title}</h2>
