@@ -1,0 +1,153 @@
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="2500" height="843" viewBox="0 0 2500 843">
+  <defs>
+    <!-- 圓角卡片遮罩 -->
+    <clipPath id="circleClip">
+      <circle cx="416" cy="300" r="150" />
+    </clipPath>
+    
+    <!-- 卡片與按鈕漸層 -->
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#f0fdf4;stop-opacity:1" />
+      <stop offset="50%" style="stop-color:#fefce8;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#ecfdf5;stop-opacity:1" />
+    </linearGradient>
+
+    <!-- 卡片 1 漸層 (暖陽綠意 - 報名活力) -->
+    <linearGradient id="card1Grad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#10b981;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#059669;stop-opacity:1" />
+    </linearGradient>
+
+    <!-- 卡片 2 漸層 (鸚鵡橘金 - 暖心紀錄) -->
+    <linearGradient id="card2Grad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#f59e0b;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#d97706;stop-opacity:1" />
+    </linearGradient>
+
+    <!-- 卡片 3 漸層 (藍綠羽翼 - 專業管理) -->
+    <linearGradient id="card3Grad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#0ea5e9;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#0284c7;stop-opacity:1" />
+    </linearGradient>
+
+    <!-- 柔和立體投影 -->
+    <filter id="softShadow" x="-10%" y="-10%" width="120%" height="120%">
+      <feDropShadow dx="0" dy="12" stdDeviation="16" flood-color="#064e3b" flood-opacity="0.12"/>
+    </filter>
+    <filter id="btnShadow" x="-10%" y="-10%" width="120%" height="120%">
+      <feDropShadow dx="0" dy="6" stdDeviation="8" flood-color="#000000" flood-opacity="0.18"/>
+    </filter>
+  </defs>
+
+  <!-- 整體底色 -->
+  <rect width="2500" height="843" fill="url(#bgGrad)"/>
+
+  <!-- 裝飾微光泡泡與羽毛點綴 -->
+  <circle cx="200" cy="120" r="80" fill="#fef08a" fill-opacity="0.4" />
+  <circle cx="1100" cy="80" r="50" fill="#bbf7d0" fill-opacity="0.5" />
+  <circle cx="2350" cy="160" r="100" fill="#bae6fd" fill-opacity="0.4" />
+
+  <!-- ======================================================== -->
+  <!-- 區塊 1: 【我要報名】(x: 0 ~ 833) - 由可愛小幫手 JuJu 本尊坐鎮推薦 -->
+  <!-- ======================================================== -->
+  <g filter="url(#softShadow)">
+    <rect x="35" y="35" width="763" height="773" rx="42" fill="#ffffff"/>
+    <rect x="35" y="35" width="763" height="773" rx="42" fill="url(#card1Grad)" fill-opacity="0.04"/>
+    <rect x="35" y="35" width="763" height="773" rx="42" stroke="#10b981" stroke-opacity="0.25" stroke-width="4"/>
+  </g>
+
+  <!-- 鸚鵡頭像圓框 (取自 juju.png) -->
+  <g filter="url(#btnShadow)">
+    <circle cx="416" cy="275" r="175" fill="#fef3c7" stroke="#10b981" stroke-width="8"/>
+    <!-- 裁切圓形展示 JuJu 的可愛面容 -->
+    <g clip-path="url(#circleClip)">
+      <image xlink:href="/images/juju.png" href="/images/juju.png" x="180" y="80" width="460" height="690" />
+    </g>
+    <!-- 可愛羽球小徽章掛在框邊 -->
+    <circle cx="540" cy="390" r="46" fill="#10b981" stroke="#ffffff" stroke-width="4"/>
+    <text x="540" y="405" font-size="44" text-anchor="middle">🏸</text>
+  </g>
+
+  <!-- 對話氣泡：啾～快來打球！ -->
+  <g filter="url(#btnShadow)">
+    <rect x="180" y="480" width="472" height="64" rx="32" fill="#fef08a"/>
+    <text x="416" y="524" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Noto Sans TC', sans-serif" font-size="28" font-weight="900" fill="#854d0e" text-anchor="middle">✨ 啾～啾！本週零打揪團囉 ✨</text>
+  </g>
+
+  <!-- 大按鈕與標題 -->
+  <g filter="url(#btnShadow)">
+    <rect x="110" y="570" width="613" height="150" rx="36" fill="url(#card1Grad)"/>
+    <text x="416" y="660" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Noto Sans TC', sans-serif" font-size="64" font-weight="900" fill="#ffffff" text-anchor="middle" letter-spacing="4">我要報名</text>
+    <text x="416" y="700" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Noto Sans TC', sans-serif" font-size="24" font-weight="700" fill="#a7f3d0" text-anchor="middle">一秒卡位 • 開放場次速查</text>
+  </g>
+
+  <!-- ======================================================== -->
+  <!-- 區塊 2: 【報名記錄】(x: 833 ~ 1667) - 暖橘金羽毛色調 (個人行程) -->
+  <!-- ======================================================== -->
+  <g filter="url(#softShadow)">
+    <rect x="868" y="35" width="763" height="773" rx="42" fill="#ffffff"/>
+    <rect x="868" y="35" width="763" height="773" rx="42" fill="url(#card2Grad)" fill-opacity="0.04"/>
+    <rect x="868" y="35" width="763" height="773" rx="42" stroke="#f59e0b" stroke-opacity="0.25" stroke-width="4"/>
+  </g>
+
+  <!-- 可愛打球記事本 & 鸚鵡羽毛圖標 -->
+  <g filter="url(#btnShadow)">
+    <circle cx="1250" cy="275" r="160" fill="#fffbeb" stroke="#f59e0b" stroke-width="6"/>
+    <!-- 圓框內可愛記事板 -->
+    <rect x="1150" y="175" width="200" height="210" rx="28" fill="#fef3c7" stroke="#d97706" stroke-width="6"/>
+    <rect x="1185" y="145" width="130" height="46" rx="14" fill="#d97706"/>
+    <circle cx="1250" cy="168" r="8" fill="#ffffff"/>
+    <!-- 勾選打卡圖示 -->
+    <text x="1200" y="245" font-size="34">🏸</text>
+    <line x1="1245" y1="235" x2="1315" y2="235" stroke="#b45309" stroke-width="8" stroke-linecap="round"/>
+    <text x="1200" y="305" font-size="34">✨</text>
+    <line x1="1245" y1="295" x2="1315" y2="295" stroke="#b45309" stroke-width="8" stroke-linecap="round"/>
+    <text x="1200" y="365" font-size="34">💚</text>
+    <line x1="1245" y1="355" x2="1295" y2="355" stroke="#b45309" stroke-width="8" stroke-linecap="round"/>
+  </g>
+
+  <!-- 標籤小貼紙 -->
+  <g filter="url(#btnShadow)">
+    <rect x="1025" y="480" width="450" height="64" rx="32" fill="#fed7aa"/>
+    <text x="1250" y="524" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Noto Sans TC', sans-serif" font-size="28" font-weight="900" fill="#9a3412" text-anchor="middle">📅 我的專屬打球小行事曆</text>
+  </g>
+
+  <!-- 大按鈕與標題 -->
+  <g filter="url(#btnShadow)">
+    <rect x="943" y="570" width="613" height="150" rx="36" fill="url(#card2Grad)"/>
+    <text x="1250" y="660" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Noto Sans TC', sans-serif" font-size="64" font-weight="900" fill="#ffffff" text-anchor="middle" letter-spacing="4">報名記錄</text>
+    <text x="1250" y="700" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Noto Sans TC', sans-serif" font-size="24" font-weight="700" fill="#fef3c7" text-anchor="middle">對帳狀態 • 撞期提醒 • 取消</text>
+  </g>
+
+  <!-- ======================================================== -->
+  <!-- 區塊 3: 【團主後台】(x: 1667 ~ 2500) - 藍天青羽色調 (管理與開團) -->
+  <!-- ======================================================== -->
+  <g filter="url(#softShadow)">
+    <rect x="1702" y="35" width="763" height="773" rx="42" fill="#ffffff"/>
+    <rect x="1702" y="35" width="763" height="773" rx="42" fill="url(#card3Grad)" fill-opacity="0.04"/>
+    <rect x="1702" y="35" width="763" height="773" rx="42" stroke="#0ea5e9" stroke-opacity="0.25" stroke-width="4"/>
+  </g>
+
+  <!-- 齒輪與皇冠圖標 (象徵團主主理) -->
+  <g filter="url(#btnShadow)">
+    <circle cx="2083" cy="275" r="160" fill="#f0f9ff" stroke="#0ea5e9" stroke-width="6"/>
+    <!-- 團主皇冠 -->
+    <text x="2083" y="240" font-size="80" text-anchor="middle">👑</text>
+    <!-- 圓底齒輪管理裝飾 -->
+    <circle cx="2083" cy="320" r="55" fill="#e0f2fe" stroke="#0284c7" stroke-width="6"/>
+    <text x="2083" y="340" font-size="52" text-anchor="middle">⚙️</text>
+  </g>
+
+  <!-- 團主標籤小貼紙 -->
+  <g filter="url(#btnShadow)">
+    <rect x="1860" y="480" width="446" height="64" rx="32" fill="#bae6fd"/>
+    <text x="2083" y="524" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Noto Sans TC', sans-serif" font-size="28" font-weight="900" fill="#0369a1" text-anchor="middle">🎯 團主開團與名單管理</text>
+  </g>
+
+  <!-- 大按鈕與標題 -->
+  <g filter="url(#btnShadow)">
+    <rect x="1777" y="570" width="613" height="150" rx="36" fill="url(#card3Grad)"/>
+    <text x="2083" y="660" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Noto Sans TC', sans-serif" font-size="64" font-weight="900" fill="#ffffff" text-anchor="middle" letter-spacing="4">團主後台</text>
+    <text x="2083" y="700" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Noto Sans TC', sans-serif" font-size="24" font-weight="700" fill="#e0f2fe" text-anchor="middle">建立場次 • 現場對帳 • 推播</text>
+  </g>
+</svg>
