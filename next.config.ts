@@ -10,6 +10,7 @@ const nextConfig: NextConfig = {
     NEXT_PUBLIC_LIFF_URL: process.env.LINE_LIFF_URL || process.env.NEXT_PUBLIC_LIFF_URL || '',
     NEXT_PUBLIC_SUPABASE_URL: cleanSupabaseUrl,
     NEXT_PUBLIC_SUPABASE_ANON_KEY: (process.env.SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '').trim(),
+    NEXT_PUBLIC_DEBUG: (process.env.DEBUG || process.env.NEXT_PUBLIC_DEBUG || 'off').toLowerCase().trim(),
   },
 };
 

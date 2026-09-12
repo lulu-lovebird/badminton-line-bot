@@ -1,11 +1,34 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
+import Link from 'next/link';
 import { Terminal, RefreshCw, AlertCircle, CheckCircle } from 'lucide-react';
 
 export default function LiffDebugPage() {
+  const isDebugEnabled = process.env.NEXT_PUBLIC_DEBUG === 'on';
+
   const [logs, setLogs] = useState<string[]>([]);
   const [liffState, setLiffState] = useState<any>({});
+
+  if (!isDebugEnabled) {
+    return (
+      <main className="min-h-screen bg-slate-900 text-slate-300 p-6 flex flex-col items-center justify-center text-center max-w-md mx-auto">
+        <div className="w-14 h-14 rounded-2xl bg-slate-800 border border-slate-700 flex items-center justify-center mb-4 text-emerald-400">
+          <Terminal size={28} />
+        </div>
+        <h1 className="text-lg font-bold text-white mb-2">除錯診斷模式已關閉</h1>
+        <p className="text-xs text-slate-400 max-w-xs leading-relaxed mb-6">
+          系統目前設定為正式運作模式 (DEBUG=off)。如需啟用診斷控制台，請在環境變數中設定 <code className="bg-slate-800 px-1.5 py-0.5 rounded text-emerald-300">DEBUG=on</code>。
+        </p>
+        <Link
+          href="/liff"
+          className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold transition-all shadow-md"
+        >
+          返回 JuJu 導航大廳
+        </Link>
+      </main>
+    );
+  }
 
   function addLog(msg: string) {
     console.log(msg);

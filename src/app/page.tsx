@@ -1,69 +1,77 @@
-import Image from "next/image";
+import React from 'react';
+import Link from 'next/link';
+import { Calendar, Users, ShieldCheck, FileText, ArrowRight, Sparkles } from 'lucide-react';
+import type { Metadata } from 'next';
+
+export const metadata: Metadata = {
+  title: '羽球零打小幫手 JuJu 🏸 | 專屬羽球社團報名小助手',
+  description: '專為羽球愛好者打造的 LINE 零打報名、候補遞補、開團管理與現場對帳小幫手。',
+};
 
 export default function Home() {
   return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert h-5 w-[100px]"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the{" "}
-            <code className="rounded bg-black/[.06] px-1.5 py-0.5 font-mono text-[0.9em] dark:bg-white/[.08]">
-              page.tsx
-            </code>{" "}
-            file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
+    <main className="min-h-screen bg-slate-50 flex flex-col justify-between text-slate-800">
+      {/* 頂部導航 */}
+      <header className="border-b border-slate-200 bg-white/80 backdrop-blur-md sticky top-0 z-10 px-6 py-4">
+        <div className="max-w-4xl mx-auto flex items-center justify-between">
+          <div className="flex items-center gap-2.5">
+            <span className="text-2xl">🏸</span>
+            <span className="font-black text-base text-slate-900 tracking-tight">羽球零打小幫手 JuJu</span>
+          </div>
+          <div className="flex items-center gap-4 text-xs font-medium text-slate-600">
+            <Link href="/privacy" className="hover:text-emerald-600 transition-colors">隱私權政策</Link>
+            <Link href="/terms" className="hover:text-emerald-600 transition-colors">服務條款</Link>
+          </div>
         </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert h-[14px] w-4"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={14}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
+      </header>
+
+      {/* 主視覺 Hero Section */}
+      <section className="flex-1 flex flex-col items-center justify-center text-center px-4 py-16 sm:py-24 max-w-2xl mx-auto">
+        <div className="w-24 h-24 rounded-3xl bg-emerald-100 border-4 border-emerald-500 shadow-xl flex items-center justify-center overflow-hidden mb-6 relative">
+          <img
+            src="/images/juju_badminton.jpg"
+            alt="JuJu"
+            className="w-full h-full object-cover"
+          />
         </div>
-      </main>
-    </div>
+
+        <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-100 text-emerald-800 text-xs font-semibold mb-4">
+          <Sparkles size={14} className="text-emerald-600" />
+          <span>專屬羽球社團 • 智慧開團報名</span>
+        </div>
+
+        <h1 className="text-3xl sm:text-4xl font-black text-slate-900 tracking-tight leading-tight mb-4">
+          零打卡位秒速搞定<br />候補遞補自動到位 🏸
+        </h1>
+
+        <p className="text-sm sm:text-base text-slate-600 leading-relaxed max-w-md mb-8">
+          告別群組 +1 混亂刷屏！JuJu 整合 LINE LIFF，提供即時報名名額、自動遞補通知與團主開團後台，讓打球更輕鬆、開團更有效率。
+        </p>
+
+        <div className="flex flex-col sm:flex-row items-center gap-3 w-full max-w-xs">
+          <Link
+            href="/liff"
+            className="w-full py-3.5 px-6 bg-emerald-600 hover:bg-emerald-700 text-white rounded-2xl font-bold text-sm shadow-md hover:shadow-lg transition-all flex items-center justify-center gap-2 group"
+          >
+            <span>進入 JuJu LIFF 大廳</span>
+            <ArrowRight size={16} className="transition-transform group-hover:translate-x-1" />
+          </Link>
+        </div>
+      </section>
+
+      {/* 底部頁尾 */}
+      <footer className="border-t border-slate-200 bg-white py-8 px-6 text-xs text-slate-500 text-center">
+        <div className="max-w-4xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-3">
+          <div>
+            © {new Date().getFullYear()} 羽球零打小幫手 JuJu. All rights reserved.
+          </div>
+          <div className="flex items-center gap-4 font-medium">
+            <Link href="/privacy" className="hover:text-emerald-600 transition-colors">隱私權政策 (Privacy Policy)</Link>
+            <span>•</span>
+            <Link href="/terms" className="hover:text-emerald-600 transition-colors">服務條款 (Terms of Use)</Link>
+          </div>
+        </div>
+      </footer>
+    </main>
   );
 }

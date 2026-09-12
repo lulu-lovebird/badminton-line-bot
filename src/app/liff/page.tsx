@@ -104,17 +104,19 @@ function LiffHubContent() {
           <span className="text-xs font-bold bg-white/20 px-2 py-1 rounded-lg">前往 →</span>
         </Link>
 
-        {/* 系統除錯診斷 */}
-        <Link
-          href="/liff/debug"
-          className="w-full p-3 bg-slate-800 hover:bg-slate-900 text-slate-200 rounded-xl flex items-center justify-between transition-all text-xs border border-slate-700 mt-4"
-        >
-          <div className="flex items-center gap-2">
-            <Terminal size={16} className="text-emerald-400" />
-            <span>連線診斷控制台 (Debug Terminal)</span>
-          </div>
-          <span className="text-[10px] text-slate-400">檢測 →</span>
-        </Link>
+        {/* 系統除錯診斷 (僅在 DEBUG=on 時顯示) */}
+        {process.env.NEXT_PUBLIC_DEBUG === 'on' && (
+          <Link
+            href="/liff/debug"
+            className="w-full p-3 bg-slate-800 hover:bg-slate-900 text-slate-200 rounded-xl flex items-center justify-between transition-all text-xs border border-slate-700 mt-4"
+          >
+            <div className="flex items-center gap-2">
+              <Terminal size={16} className="text-emerald-400" />
+              <span>連線診斷控制台 (Debug Terminal)</span>
+            </div>
+            <span className="text-[10px] text-slate-400">檢測 →</span>
+          </Link>
+        )}
       </div>
     </main>
   );
