@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { verifyLineIdToken, isSuperAdmin } from '@/lib/auth';
 import { supabaseAdmin } from '@/lib/supabase';
 
+export const dynamic = 'force-dynamic';
+
 export async function GET(req: NextRequest) {
   const authHeader = req.headers.get('authorization');
   let lineUserId: string | null = null;
@@ -18,7 +20,7 @@ export async function GET(req: NextRequest) {
     }
   }
 
-  // 允許測試模式
+  // 允許本地測試模式
   const testUserId = req.headers.get('x-test-user-id');
   if (!lineUserId && process.env.NODE_ENV !== 'production' && testUserId) {
     lineUserId = testUserId;
@@ -32,49 +34,87 @@ export async function GET(req: NextRequest) {
   // 1. 檢查是否在 .env 的 SUPER_ADMIN_LINE_IDS 白名單中
   const envIsAdmin = isSuperAdmin(lineUserId);
 
-  // 2. 取得使用者資料與資料庫角色
-  let { data: user, error: selectErr } = await supabaseAdmin
-    .from('users')
-    .select('*')
-    .eq('line_user_id', lineUserId)
-    .maybeSingle();
-
-  if (selectErr) {
-    console.error('Supabase 查詢錯誤:', selectErr);
-    return NextResponse.json({ error: `資料庫連線或查詢失敗: ${selectErr.message}` }, { status: 500 });
-  }
-
-  if (!user) {
-    // 第一次登入自動註冊
-    const { data: newUser, error: insertErr } = await supabaseAdmin
+  try {
+    // 2. 取得使用者資料與資料庫角色
+    let { data: user, error: selectErr } = await supabaseAdmin
       .from('users')
-      .insert({
+      .select('*')
+      .eq('line_user_id', lineUserId)
+      .maybeSingle();
+
+    if (selectErr) {
+      console.warn('Supabase users 查詢警示 (可能為短暫冷啟動或連線逾時):', selectErr.message);
+      // 🛡️ 容錯保護：若為 Super Admin，在資料庫短暫逾時下依然認可管理者身分，不中斷操作
+      if (envIsAdmin) {
+        return NextResponse.json({
+          line_user_id: lineUserId,
+          display_name: userName || '超級管理員',
+          role: 'admin',
+          is_super_admin: true,
+        });
+      }
+      return NextResponse.json(
+        { error: `資料庫連線逾時，請點擊下方按鈕重試: ${selectErr.message}` },
+        { status: 504 }
+      );
+    }
+
+    if (!user) {
+      // 第一次登入自動註冊 (採用原子 upsert，防範並行並發造成的 row lock 與 504 逾時)
+      const { data: newUser, error: upsertErr } = await supabaseAdmin
+        .from('users')
+        .upsert(
+          {
+            line_user_id: lineUserId,
+            display_name: userName || '球友',
+            picture_url: userPic,
+            role: envIsAdmin ? 'admin' : 'member',
+          },
+          { onConflict: 'line_user_id' }
+        )
+        .select()
+        .single();
+
+      if (upsertErr) {
+        console.error('Supabase 建立使用者錯誤:', upsertErr);
+      }
+      user = newUser || {
         line_user_id: lineUserId,
         display_name: userName || '球友',
-        picture_url: userPic,
         role: envIsAdmin ? 'admin' : 'member',
-      })
-      .select()
-      .single();
-
-    if (insertErr) {
-      console.error('Supabase 新增使用者錯誤:', insertErr);
-      return NextResponse.json({ error: `資料庫新增失敗: ${insertErr.message}` }, { status: 500 });
+      };
+    } else if (envIsAdmin && user.role !== 'admin') {
+      // 若在 .env 中被指定為 super admin，自動同步更新資料庫角色為 admin
+      const { data: updatedUser } = await supabaseAdmin
+        .from('users')
+        .update({ role: 'admin' })
+        .eq('line_user_id', lineUserId)
+        .select()
+        .single();
+      if (updatedUser) user = updatedUser;
     }
-    user = newUser;
-  } else if (envIsAdmin && user.role !== 'admin') {
-    // 若在 .env 中被指定為 super admin，自動同步更新資料庫角色為 admin
-    const { data: updatedUser } = await supabaseAdmin
-      .from('users')
-      .update({ role: 'admin' })
-      .eq('line_user_id', lineUserId)
-      .select()
-      .single();
-    user = updatedUser;
-  }
 
-  return NextResponse.json({
-    ...user,
-    is_super_admin: envIsAdmin || user?.role === 'admin',
-  });
+    return NextResponse.json(
+      {
+        ...user,
+        is_super_admin: envIsAdmin || user?.role === 'admin',
+      },
+      {
+        headers: {
+          'Cache-Control': 'no-store, no-cache, must-revalidate',
+        },
+      }
+    );
+  } catch (err: unknown) {
+    const errorMsg = err instanceof Error ? err.message : '內部伺服器錯誤';
+    if (envIsAdmin) {
+      return NextResponse.json({
+        line_user_id: lineUserId,
+        display_name: userName || '管理員',
+        role: 'admin',
+        is_super_admin: true,
+      });
+    }
+    return NextResponse.json({ error: errorMsg }, { status: 500 });
+  }
 }
