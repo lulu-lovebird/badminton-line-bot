@@ -1,6 +1,6 @@
 'use client';
 
-import React, { Suspense } from 'react';
+import React, { Suspense, useEffect } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { Calendar, ClipboardList, Settings, Terminal, Shield, Sparkles } from 'lucide-react';
@@ -12,6 +12,10 @@ function LiffHubContent() {
   const groupQuery = groupId ? `?groupId=${encodeURIComponent(groupId)}` : '';
 
   const { userProfile, isReady } = useLiff();
+
+  useEffect(() => {
+    document.title = '羽球零打小幫手 JuJu 🏸';
+  }, []);
 
   return (
     <main className="min-h-screen bg-slate-50 p-6 flex flex-col items-center justify-center max-w-md mx-auto text-center pb-24">

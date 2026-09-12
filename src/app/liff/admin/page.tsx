@@ -89,6 +89,7 @@ function AdminDashboardContent() {
   }
 
   useEffect(() => {
+    document.title = '⚙️ 團主管理後台';
     checkAdminAuth();
   }, []);
 

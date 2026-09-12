@@ -16,6 +16,7 @@ export default function MyRecordsPage() {
   const [msg, setMsg] = useState<string | null>(null);
 
   useEffect(() => {
+    document.title = '📋 我的報名記錄';
     async function setup() {
       try {
         const liff = await initLiff();

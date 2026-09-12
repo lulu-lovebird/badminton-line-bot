@@ -53,6 +53,7 @@ function SessionListContent() {
   // 首次載入
   const hasFetchedRef = useRef(false);
   useEffect(() => {
+    document.title = '🏸 我要報名零打';
     if (hasFetchedRef.current) return;
     hasFetchedRef.current = true;
     fetchSessions();
