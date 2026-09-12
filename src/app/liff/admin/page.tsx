@@ -58,14 +58,14 @@ function AdminDashboardContent() {
       let lineProfile: { userId: string; displayName: string } | null = null;
 
       if (liff) {
-        if (!liff.isLoggedIn()) {
-          liff.login();
-          return;
-        }
         token = liff.getIDToken() || '';
         setIdToken(token);
-        const p = await liff.getProfile();
-        lineProfile = { userId: p.userId, displayName: p.displayName };
+        try {
+          const p = await liff.getProfile();
+          lineProfile = { userId: p.userId, displayName: p.displayName };
+        } catch {
+          // 在部分環境 getProfile 可能稍慢
+        }
       }
 
       const headers: Record<string, string> = {};
@@ -92,7 +92,7 @@ function AdminDashboardContent() {
         }
       } else {
         const errJson = await res.json().catch(() => ({}));
-        setAuthError(errJson.error || '身分驗證失敗，請確認 LINE Developers Console 之 LINE_CHANNEL_ID 與 ACCESS_TOKEN 設定');
+        setAuthError(errJson.error || '身分驗證失敗');
         setIsAuthorized(false);
       }
     } catch (e: unknown) {
@@ -277,7 +277,6 @@ function AdminDashboardContent() {
     }
   }
 
-  // 載入中狀態
   if (loading) {
     return (
       <main className="min-h-screen bg-slate-100 p-6 flex flex-col items-center justify-center text-center">
@@ -287,7 +286,6 @@ function AdminDashboardContent() {
     );
   }
 
-  // 無權限或驗證未通過畫面 (附帶詳細診斷資訊)
   if (isAuthorized === false) {
     return (
       <main className="min-h-screen bg-slate-100 p-6 flex flex-col items-center justify-center text-center">
@@ -333,7 +331,6 @@ function AdminDashboardContent() {
 
   return (
     <main className="min-h-screen bg-slate-100 p-4 pb-20 max-w-lg mx-auto text-slate-800">
-      {/* 導航標籤頁 */}
       <div className="flex bg-white rounded-2xl p-1 shadow-sm mb-4 border border-slate-200">
         <button
           onClick={() => {
@@ -360,7 +357,6 @@ function AdminDashboardContent() {
         </button>
       </div>
 
-      {/* 頁面 1: 建立新場次 */}
       {activeTab === 'create' && (
         <form onSubmit={handleCreateSession} className="bg-white p-5 rounded-2xl shadow-sm border border-slate-200 space-y-3">
           <h2 className="font-bold text-base text-slate-800 border-b pb-2">新增本週零打場次</h2>
@@ -501,7 +497,6 @@ function AdminDashboardContent() {
         </form>
       )}
 
-      {/* 頁面 2: 場次列表與名單管理 */}
       {activeTab === 'sessions' && !selectedSession && (
         <div className="space-y-3">
           <div className="flex items-center justify-between">
@@ -563,7 +558,6 @@ function AdminDashboardContent() {
         </div>
       )}
 
-      {/* 頁面 3: 單一場次詳細名單管理 */}
       {selectedSession && (
         <div className="space-y-4">
           <button
@@ -577,7 +571,6 @@ function AdminDashboardContent() {
             <h2 className="font-bold text-slate-800 text-base">{selectedSession.title}</h2>
             <p className="text-xs text-slate-500 mt-1">{selectedSession.location}</p>
 
-            {/* 緊急推播廣播區 */}
             <div className="mt-3 pt-3 border-t border-slate-100">
               <label className="text-xs font-bold text-slate-700 flex items-center gap-1">
                 <Send size={13} className="text-emerald-600" /> 向本場所有報名球友發送緊急通知
@@ -600,7 +593,6 @@ function AdminDashboardContent() {
               </div>
             </div>
 
-            {/* 代報名區 */}
             <form onSubmit={handleProxyRegister} className="mt-3 pt-3 border-t border-slate-100">
               <label className="text-xs font-bold text-slate-700 flex items-center gap-1">
                 <PlusCircle size={13} className="text-blue-600" /> 手動替球友代報名 (+1)
@@ -632,7 +624,6 @@ function AdminDashboardContent() {
             </form>
           </div>
 
-          {/* 球友名單列表 */}
           <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm space-y-3">
             <h3 className="font-bold text-xs text-slate-500 uppercase">報名球友清單與收款對帳</h3>
 
