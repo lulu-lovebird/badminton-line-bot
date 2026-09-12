@@ -5,9 +5,10 @@ import liff from '@line/liff';
 let isInitialized = false;
 
 export async function initLiff() {
-  const liffId = process.env.NEXT_PUBLIC_LIFF_ID || '';
+  // 同時支援 LINE_LIFF_ID 與 NEXT_PUBLIC_LIFF_ID
+  const liffId = process.env.NEXT_PUBLIC_LIFF_ID || process.env.LINE_LIFF_ID || '';
   if (!liffId) {
-    console.warn('NEXT_PUBLIC_LIFF_ID is not configured');
+    console.warn('LIFF ID 未設定，請在環境變數填寫 LINE_LIFF_ID');
     return null;
   }
 
