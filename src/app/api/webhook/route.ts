@@ -3,7 +3,6 @@ import crypto from 'crypto';
 import { lineClient, createSessionFlexMessage } from '@/lib/line';
 import { supabaseAdmin } from '@/lib/supabase';
 
-// 驗證 LINE 簽名
 function verifySignature(body: string, signature: string, secret: string) {
   const hash = crypto
     .createHmac('SHA256', secret)
@@ -25,22 +24,18 @@ export async function POST(req: NextRequest) {
   const events = data.events || [];
 
   for (const event of events) {
-    const liffBaseUrl = process.env.NEXT_PUBLIC_LIFF_URL || 'https://liff.line.me/your-liff-id';
+    const liffBaseUrl = process.env.NEXT_PUBLIC_LIFF_URL || process.env.LINE_LIFF_URL || 'https://liff.line.me/your-liff-id';
 
-    // 1. 處理機器人被邀請加入群組事件 (join event)
+    // 1. 處理機器人被邀請加入群組
     if (event.type === 'join') {
       const groupId = event.source.groupId || event.source.roomId;
       if (groupId) {
-        // 嘗試取得群組名稱
         let groupName = '羽球社團群組';
         try {
           const summary = await lineClient.getGroupSummary(groupId);
           if (summary?.groupName) groupName = summary.groupName;
-        } catch {
-          // ignore
-        }
+        } catch {}
 
-        // 自動在資料庫建立群組檔案
         await supabaseAdmin.from('groups').upsert({
           group_id: groupId,
           group_name: groupName,
@@ -121,8 +116,23 @@ export async function POST(req: NextRequest) {
       const replyToken = event.replyToken;
       const isGroup = event.source.type === 'group' || event.source.type === 'room';
       const groupId = isGroup ? (event.source.groupId || event.source.roomId) : null;
+      const senderUserId = event.source.userId;
 
-      // 🛡️ 檢查該群組是否被超級管理員停權
+      // 🔍 專屬查詢指令：我的ID / 我的id / whoami
+      if (userText === '我的id' || userText === '我的ID' || userText.toLowerCase() === 'whoami') {
+        await lineClient.replyMessage({
+          replyToken,
+          messages: [
+            {
+              type: 'text',
+              text: `🔑 您的 LINE User ID 為：\n${senderUserId}\n\n(請複製此 ID 填入 Vercel 的 SUPER_ADMIN_LINE_IDS 環境變數)`,
+            },
+          ],
+        });
+        continue;
+      }
+
+      // 檢查群組停權
       if (groupId) {
         const { data: grp } = await supabaseAdmin
           .from('groups')
@@ -131,7 +141,6 @@ export async function POST(req: NextRequest) {
           .single();
 
         if (grp && !grp.is_active) {
-          // 若已被停權，直接靜音或提示
           if (userText === '零打' || userText === '我要報名' || userText === '開團') {
             await lineClient.replyMessage({
               replyToken,
@@ -142,7 +151,7 @@ export async function POST(req: NextRequest) {
         }
       }
 
-      // 觸發關鍵字：零打 / 我要報名 / 開團
+      // 關鍵字：零打 / 我要報名 / 開團
       if (userText === '零打' || userText === '我要報名' || userText === '開團') {
         const groupParam = groupId ? `?groupId=${groupId}` : '';
         const liffUrl = `${liffBaseUrl}${groupParam}`;
@@ -195,7 +204,6 @@ export async function POST(req: NextRequest) {
             ],
           });
         } else {
-          // 私訊內：查詢全域或跨群近期開放場次
           const now = new Date().toISOString();
           const { data: sessions } = await supabaseAdmin
             .from('match_sessions')
