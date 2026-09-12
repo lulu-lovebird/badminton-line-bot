@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { PlusCircle, Users, CheckCircle, Clock, MapPin, Send, AlertCircle, RefreshCw, ShieldAlert } from 'lucide-react';
+import { PlusCircle, Users, CheckCircle, Clock, MapPin, Send, AlertCircle, RefreshCw, ShieldAlert, Key } from 'lucide-react';
 import { MatchSession, Registration } from '@/types/database';
 import { initLiff } from '@/lib/liff-client';
 
@@ -16,7 +16,9 @@ function AdminDashboardContent() {
   const [registrations, setRegistrations] = useState<Registration[]>([]);
   const [loading, setLoading] = useState(true);
   const [isAuthorized, setIsAuthorized] = useState<boolean | null>(null);
+  const [userProfile, setUserProfile] = useState<{ line_user_id: string; display_name: string; role: string } | null>(null);
   const [idToken, setIdToken] = useState<string>('');
+  const [authError, setAuthError] = useState<string>('');
 
   // 緊急廣播訊息狀態
   const [broadcastMsg, setBroadcastMsg] = useState('');
@@ -26,7 +28,7 @@ function AdminDashboardContent() {
   const [proxyName, setProxyName] = useState('');
   const [proxySize, setProxySize] = useState(1);
 
-  // 新開場次表單狀態 (綁定 group_id)
+  // 新開場次表單狀態
   const [form, setForm] = useState({
     group_id: urlGroupId,
     title: '',
@@ -48,17 +50,29 @@ function AdminDashboardContent() {
   }, []);
 
   async function checkAdminAuth() {
+    setLoading(true);
+    setAuthError('');
     try {
       const liff = await initLiff();
       let token = '';
-      if (liff && liff.isLoggedIn()) {
+      let lineProfile: { userId: string; displayName: string } | null = null;
+
+      if (liff) {
+        if (!liff.isLoggedIn()) {
+          liff.login();
+          return;
+        }
         token = liff.getIDToken() || '';
         setIdToken(token);
+        const p = await liff.getProfile();
+        lineProfile = { userId: p.userId, displayName: p.displayName };
       }
 
       const headers: Record<string, string> = {};
       if (token) {
         headers['Authorization'] = `Bearer ${token}`;
+      } else if (lineProfile) {
+        headers['x-test-user-id'] = lineProfile.userId;
       } else {
         headers['x-test-user-id'] = 'host_admin_001';
       }
@@ -66,27 +80,37 @@ function AdminDashboardContent() {
       const res = await fetch('/api/auth/me', { headers });
       if (res.ok) {
         const user = await res.json();
-        if (user.role === 'host' || user.role === 'admin' || process.env.NODE_ENV !== 'production') {
+        setUserProfile(user);
+        if (user.role === 'host' || user.role === 'admin' || user.is_super_admin) {
           setIsAuthorized(true);
-          fetchSessions(token);
+          fetchSessions(token, user.line_user_id);
+          return;
+        } else {
+          setAuthError(`您的身分目前是【一般球友】(ID: ${user.line_user_id})，尚未取得團主權限。`);
+          setIsAuthorized(false);
           return;
         }
+      } else {
+        const errJson = await res.json().catch(() => ({}));
+        setAuthError(errJson.error || '身分驗證失敗，請確認 LINE Developers Console 之 LINE_CHANNEL_ID 與 ACCESS_TOKEN 設定');
+        setIsAuthorized(false);
       }
-      setIsAuthorized(false);
-    } catch (e) {
+    } catch (e: unknown) {
       console.error(e);
+      setAuthError((e as Error).message || '連線錯誤');
       setIsAuthorized(false);
     } finally {
       setLoading(false);
     }
   }
 
-  async function fetchSessions(token?: string) {
+  async function fetchSessions(token?: string, userId?: string) {
     setLoading(true);
     try {
       const currentToken = token || idToken;
       const headers: Record<string, string> = {};
       if (currentToken) headers['Authorization'] = `Bearer ${currentToken}`;
+      else if (userId) headers['x-test-user-id'] = userId;
       else headers['x-test-user-id'] = 'host_admin_001';
 
       const qs = urlGroupId ? `?groupId=${urlGroupId}` : '';
@@ -105,7 +129,7 @@ function AdminDashboardContent() {
     try {
       const headers: Record<string, string> = {};
       if (idToken) headers['Authorization'] = `Bearer ${idToken}`;
-      else headers['x-test-user-id'] = 'host_admin_001';
+      else if (userProfile?.line_user_id) headers['x-test-user-id'] = userProfile.line_user_id;
 
       const res = await fetch(`/api/registrations?sessionId=${session.id}`, { headers });
       const data = await res.json();
@@ -120,7 +144,7 @@ function AdminDashboardContent() {
     try {
       const headers: Record<string, string> = { 'Content-Type': 'application/json' };
       if (idToken) headers['Authorization'] = `Bearer ${idToken}`;
-      else headers['x-test-user-id'] = 'host_admin_001';
+      else if (userProfile?.line_user_id) headers['x-test-user-id'] = userProfile.line_user_id;
 
       const res = await fetch('/api/registrations', {
         method: 'PATCH',
@@ -146,7 +170,7 @@ function AdminDashboardContent() {
     try {
       const headers: Record<string, string> = { 'Content-Type': 'application/json' };
       if (idToken) headers['Authorization'] = `Bearer ${idToken}`;
-      else headers['x-test-user-id'] = 'host_admin_001';
+      else if (userProfile?.line_user_id) headers['x-test-user-id'] = userProfile.line_user_id;
 
       const res = await fetch('/api/registrations', {
         method: 'PATCH',
@@ -155,7 +179,7 @@ function AdminDashboardContent() {
       });
       if (res.ok && selectedSession) {
         openSessionDetail(selectedSession);
-        fetchSessions();
+        fetchSessions(idToken, userProfile?.line_user_id);
       }
     } catch (e) {
       console.error(e);
@@ -169,7 +193,7 @@ function AdminDashboardContent() {
     try {
       const headers: Record<string, string> = { 'Content-Type': 'application/json' };
       if (idToken) headers['Authorization'] = `Bearer ${idToken}`;
-      else headers['x-test-user-id'] = 'host_admin_001';
+      else if (userProfile?.line_user_id) headers['x-test-user-id'] = userProfile.line_user_id;
 
       const res = await fetch('/api/registrations', {
         method: 'POST',
@@ -184,7 +208,7 @@ function AdminDashboardContent() {
       if (res.ok) {
         setProxyName('');
         openSessionDetail(selectedSession);
-        fetchSessions();
+        fetchSessions(idToken, userProfile?.line_user_id);
       } else {
         const err = await res.json();
         alert(err.error || '代報名失敗');
@@ -200,7 +224,7 @@ function AdminDashboardContent() {
     try {
       const headers: Record<string, string> = { 'Content-Type': 'application/json' };
       if (idToken) headers['Authorization'] = `Bearer ${idToken}`;
-      else headers['x-test-user-id'] = 'host_admin_001';
+      else if (userProfile?.line_user_id) headers['x-test-user-id'] = userProfile.line_user_id;
 
       const res = await fetch('/api/notify', {
         method: 'POST',
@@ -229,21 +253,21 @@ function AdminDashboardContent() {
     try {
       const headers: Record<string, string> = { 'Content-Type': 'application/json' };
       if (idToken) headers['Authorization'] = `Bearer ${idToken}`;
-      else headers['x-test-user-id'] = 'host_admin_001';
+      else if (userProfile?.line_user_id) headers['x-test-user-id'] = userProfile.line_user_id;
 
       const res = await fetch('/api/sessions', {
         method: 'POST',
         headers,
         body: JSON.stringify({
           ...form,
-          host_user_id: 'host_admin_001',
+          host_user_id: userProfile?.line_user_id || 'host_admin_001',
           notify_group_id: form.group_id || undefined,
         }),
       });
       if (res.ok) {
         alert('🎉 場次建立成功！已同步發送卡片！');
         setActiveTab('sessions');
-        fetchSessions();
+        fetchSessions(idToken, userProfile?.line_user_id);
       } else {
         const err = await res.json();
         alert(err.error || '建立失敗');
@@ -253,14 +277,56 @@ function AdminDashboardContent() {
     }
   }
 
+  // 載入中狀態
+  if (loading) {
+    return (
+      <main className="min-h-screen bg-slate-100 p-6 flex flex-col items-center justify-center text-center">
+        <RefreshCw size={36} className="animate-spin text-emerald-600 mb-3" />
+        <p className="text-xs text-slate-500 font-bold">驗證團主身分中，請稍候...</p>
+      </main>
+    );
+  }
+
+  // 無權限或驗證未通過畫面 (附帶詳細診斷資訊)
   if (isAuthorized === false) {
     return (
       <main className="min-h-screen bg-slate-100 p-6 flex flex-col items-center justify-center text-center">
-        <ShieldAlert size={48} className="text-red-500 mb-3" />
-        <h2 className="text-lg font-bold text-slate-800">無存取權限</h2>
-        <p className="text-xs text-slate-500 mt-2 max-w-xs">
-          此頁面僅限零打團主與社團管理員進入。若您是團主，請向系統管理員開通權限。
+        <ShieldAlert size={52} className="text-amber-500 mb-3" />
+        <h2 className="text-lg font-bold text-slate-800">尚未開通團主權限</h2>
+        <p className="text-xs text-slate-600 mt-2 max-w-xs leading-relaxed">
+          {authError || '此頁面僅限零打團主與社團管理員進入。'}
         </p>
+
+        {userProfile && (
+          <div className="mt-4 p-3.5 bg-white rounded-2xl border border-slate-200 text-left text-xs max-w-xs w-full shadow-sm">
+            <div className="flex items-center gap-1.5 font-bold text-slate-700 mb-1.5 border-b pb-1.5">
+              <Key size={14} className="text-emerald-600" />
+              <span>您的目前 LINE 帳號資料</span>
+            </div>
+            <div className="text-slate-500 space-y-1 text-[11px]">
+              <div>暱稱：<span className="text-slate-800 font-bold">{userProfile.display_name}</span></div>
+              <div>身分角色：<span className="text-amber-600 font-bold">{userProfile.role}</span></div>
+              <div className="break-all font-mono text-[10px] text-slate-400 mt-1">
+                LINE ID: {userProfile.line_user_id}
+              </div>
+            </div>
+          </div>
+        )}
+
+        <div className="mt-4 flex flex-col gap-2 w-full max-w-xs">
+          <button
+            onClick={() => checkAdminAuth()}
+            className="w-full py-2.5 bg-emerald-600 text-white rounded-xl text-xs font-bold shadow-sm"
+          >
+            重新整理並驗證
+          </button>
+          <a
+            href="/liff/super-admin"
+            className="w-full py-2.5 bg-slate-800 text-white rounded-xl text-xs font-bold shadow-sm"
+          >
+            前往系統最高管理後台 (開通團主)
+          </a>
+        </div>
       </main>
     );
   }
@@ -442,14 +508,12 @@ function AdminDashboardContent() {
             <h2 className="text-xs font-bold text-slate-500 uppercase tracking-wider">
               {urlGroupId ? '本群場次總覽' : '進行中與開放場次'}
             </h2>
-            <button onClick={() => fetchSessions()} className="text-slate-400 hover:text-slate-600">
+            <button onClick={() => fetchSessions(idToken, userProfile?.line_user_id)} className="text-slate-400 hover:text-slate-600">
               <RefreshCw size={14} />
             </button>
           </div>
 
-          {loading ? (
-            <div className="text-center py-10 text-xs text-slate-400">載入中...</div>
-          ) : sessions.length === 0 ? (
+          {sessions.length === 0 ? (
             <div className="text-center py-10 bg-white rounded-2xl border text-xs text-slate-500">
               尚無場次，請點擊上方「建立新零打場次」
             </div>
