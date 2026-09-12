@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, Suspense } from 'react';
+import React, { useState, useEffect, useRef, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { Calendar, MapPin, Users, DollarSign, Award, CheckCircle, AlertCircle, Clock } from 'lucide-react';
 import { MatchSession } from '@/types/database';
@@ -8,7 +8,7 @@ import { initLiff } from '@/lib/liff-client';
 
 function SessionListContent() {
   const searchParams = useSearchParams();
-  const groupId = searchParams.get('groupId'); // 支援依群組過濾
+  const groupId = searchParams.get('groupId') || '';
 
   const [sessions, setSessions] = useState<MatchSession[]>([]);
   const [loading, setLoading] = useState(true);
@@ -19,14 +19,19 @@ function SessionListContent() {
   const [submittingId, setSubmittingId] = useState<string | null>(null);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
+  // 🛡️ 防跳閃終極安全鎖：保證整個頁面載入期間只執行一次 setup 與 fetchSessions
+  const initializedRef = useRef(false);
+
   useEffect(() => {
+    if (initializedRef.current) return;
+    initializedRef.current = true;
+
     async function setup() {
       try {
         const liff = await initLiff();
-        let token = '';
         if (liff && liff.isLoggedIn()) {
           const profile = await liff.getProfile();
-          token = liff.getIDToken() || '';
+          const token = liff.getIDToken() || '';
           setIdToken(token);
           setUserProfile({
             userId: profile.userId,
@@ -34,19 +39,39 @@ function SessionListContent() {
           });
         } else {
           setUserProfile({
-            userId: 'U_demo_player_001',
-            displayName: '測試球友小明',
+            userId: 'U_guest_player',
+            displayName: '球友',
           });
         }
       } catch (err) {
-        console.error(err);
+        console.warn('LIFF 載入提示:', err);
+      } finally {
+        fetchSessionsInitial();
       }
     }
-    setup();
-    fetchSessions();
-  }, [groupId]);
 
-  async function fetchSessions(date?: string) {
+    async function fetchSessionsInitial() {
+      try {
+        const params = new URLSearchParams();
+        if (groupId) params.append('groupId', groupId);
+        const qs = params.toString() ? `?${params.toString()}` : '';
+
+        const res = await fetch(`/api/sessions${qs}`);
+        if (res.ok) {
+          const data = await res.json();
+          setSessions(Array.isArray(data) ? data : []);
+        }
+      } catch (err) {
+        console.error('查詢場次失敗:', err);
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    setup();
+  }, []); // 👈 空依賴陣列，確保只在載入時執行一次，杜絕 URL 變動造成的循環刷新！
+
+  async function fetchSessionsByDate(date: string) {
     setLoading(true);
     try {
       const params = new URLSearchParams();
@@ -55,8 +80,10 @@ function SessionListContent() {
 
       const qs = params.toString() ? `?${params.toString()}` : '';
       const res = await fetch(`/api/sessions${qs}`);
-      const data = await res.json();
-      setSessions(Array.isArray(data) ? data : []);
+      if (res.ok) {
+        const data = await res.json();
+        setSessions(Array.isArray(data) ? data : []);
+      }
     } catch (err) {
       console.error(err);
     } finally {
@@ -105,7 +132,7 @@ function SessionListContent() {
         });
       }
 
-      fetchSessions(selectedDate);
+      fetchSessionsByDate(selectedDate);
     } catch (err: unknown) {
       const errorMsg = err instanceof Error ? err.message : '報名時發生錯誤';
       setMessage({ type: 'error', text: errorMsg });
@@ -157,14 +184,14 @@ function SessionListContent() {
             value={selectedDate}
             onChange={(e) => {
               setSelectedDate(e.target.value);
-              fetchSessions(e.target.value);
+              fetchSessionsByDate(e.target.value);
             }}
           />
           {selectedDate && (
             <button
               onClick={() => {
                 setSelectedDate('');
-                fetchSessions('');
+                fetchSessionsByDate('');
               }}
               className="text-xs text-slate-500 hover:text-slate-800 underline"
             >
@@ -193,7 +220,6 @@ function SessionListContent() {
                 key={s.id}
                 className="bg-white rounded-2xl border border-slate-200 p-4 shadow-sm hover:shadow transition-all relative overflow-hidden"
               >
-                {/* 頂部狀態標籤 */}
                 <div className="flex items-center justify-between mb-2">
                   <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-slate-100 text-slate-700">
                     {s.match_type === 'single' ? '單打' : '雙打'}
@@ -250,7 +276,6 @@ function SessionListContent() {
                   </div>
                 )}
 
-                {/* 報名按鈕區 */}
                 <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between">
                   <div className="flex items-center gap-1.5 text-xs text-slate-600">
                     <span>人數:</span>

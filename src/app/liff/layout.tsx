@@ -2,12 +2,9 @@
 
 import React from 'react';
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
 import { Calendar, ClipboardList, Settings } from 'lucide-react';
 
 export default function LiffLayout({ children }: { children: React.ReactNode }) {
-  const pathname = usePathname();
-
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col justify-between">
       {/* 頁面主要內容 */}
@@ -15,15 +12,11 @@ export default function LiffLayout({ children }: { children: React.ReactNode }) 
         {children}
       </div>
 
-      {/* 底部常駐導航 Bar：方便球友與團主隨時無縫切換 */}
+      {/* 底部常駐靜態導航 Bar (拿掉動態 usePathname 監聽，徹底防止 re-render 跳閃) */}
       <nav className="fixed bottom-0 left-0 right-0 max-w-md mx-auto bg-white/95 backdrop-blur border-t border-slate-200 px-6 py-2 flex justify-around items-center z-50 shadow-lg">
         <Link
           href="/liff/sessions"
-          className={`flex flex-col items-center gap-0.5 text-[11px] font-bold transition-all ${
-            pathname.includes('/sessions')
-              ? 'text-emerald-600 scale-105'
-              : 'text-slate-400 hover:text-slate-600'
-          }`}
+          className="flex flex-col items-center gap-0.5 text-[11px] font-bold text-slate-500 hover:text-emerald-600 active:text-emerald-600"
         >
           <Calendar size={19} />
           <span>我要報名</span>
@@ -31,11 +24,7 @@ export default function LiffLayout({ children }: { children: React.ReactNode }) 
 
         <Link
           href="/liff/my-records"
-          className={`flex flex-col items-center gap-0.5 text-[11px] font-bold transition-all ${
-            pathname.includes('/my-records')
-              ? 'text-amber-600 scale-105'
-              : 'text-slate-400 hover:text-slate-600'
-          }`}
+          className="flex flex-col items-center gap-0.5 text-[11px] font-bold text-slate-500 hover:text-amber-600 active:text-amber-600"
         >
           <ClipboardList size={19} />
           <span>報名記錄</span>
@@ -43,11 +32,7 @@ export default function LiffLayout({ children }: { children: React.ReactNode }) 
 
         <Link
           href="/liff/admin"
-          className={`flex flex-col items-center gap-0.5 text-[11px] font-bold transition-all ${
-            pathname.includes('/admin')
-              ? 'text-blue-600 scale-105'
-              : 'text-slate-400 hover:text-slate-600'
-          }`}
+          className="flex flex-col items-center gap-0.5 text-[11px] font-bold text-slate-500 hover:text-blue-600 active:text-blue-600"
         >
           <Settings size={19} />
           <span>團主後台</span>
