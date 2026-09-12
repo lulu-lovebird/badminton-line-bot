@@ -9,17 +9,22 @@ function LiffDispatcher() {
   const searchParams = useSearchParams();
 
   useEffect(() => {
-    // 檢查是否有指定跳轉目標 (例如 ?page=admin 或 ?target=admin)
+    // 檢查目前網址是否已在目標路徑，避免重複 replace 造成循環
+    const currentPath = window.location.pathname;
+    if (currentPath !== '/liff') {
+      return;
+    }
+
     const target = searchParams.get('target') || searchParams.get('page');
     const groupId = searchParams.get('groupId');
     const groupParam = groupId ? `?groupId=${groupId}` : '';
 
     if (target === 'admin') {
-      router.replace(`/liff/admin${groupParam}`);
+      window.location.replace(`/liff/admin${groupParam}`);
     } else if (target === 'my-records') {
-      router.replace(`/liff/my-records${groupParam}`);
+      window.location.replace(`/liff/my-records${groupParam}`);
     } else {
-      router.replace(`/liff/sessions${groupParam}`);
+      window.location.replace(`/liff/sessions${groupParam}`);
     }
   }, [router, searchParams]);
 

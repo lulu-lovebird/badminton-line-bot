@@ -1,11 +1,16 @@
 'use client';
 
-import liff from '@line/liff';
+let liffInstance: any = null;
+let initPromise: Promise<any> | null = null;
 
-let initPromise: Promise<typeof liff | null> | null = null;
-
+/**
+ * 徹底防跳閃的 LIFF 客戶端初始化模組
+ */
 export async function initLiff() {
   if (typeof window === 'undefined') return null;
+
+  if (liffInstance) return liffInstance;
+  if (initPromise) return initPromise;
 
   const liffId =
     process.env.NEXT_PUBLIC_LIFF_ID ||
@@ -17,19 +22,14 @@ export async function initLiff() {
     return null;
   }
 
-  if (initPromise) return initPromise;
-
   initPromise = (async () => {
     try {
+      // 動態引入 @line/liff，避免 SSR 時發生衝突
+      const liffModule = await import('@line/liff');
+      const liff = liffModule.default || liffModule;
+
       await liff.init({ liffId });
-
-      // 🛡️ 防無限迴圈機制：
-      // 只有在「非 LINE 內部瀏覽器 (例如外部 Safari/Chrome)」且未登入時才呼叫 login
-      if (!liff.isInClient() && !liff.isLoggedIn()) {
-        liff.login();
-        return null;
-      }
-
+      liffInstance = liff;
       return liff;
     } catch (error) {
       console.error('LIFF 初始化失敗:', error);
