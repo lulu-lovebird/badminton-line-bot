@@ -6,18 +6,32 @@ import { PlusCircle, Users, CheckCircle, Clock, MapPin, Send, AlertCircle, Refre
 import { MatchSession, Registration } from '@/types/database';
 import { initLiff } from '@/lib/liff-client';
 
-// 輔助函式：計算時間順延天數並輸出 datetime-local 格式 (YYYY-MM-DDTHH:mm)
+// 輔助函式：計算時間順延天數並輸出 datetime-local 格式 (YYYY-MM-DDTHH:mm) - 強制以台灣時區 Asia/Taipei 轉換
 function toDatetimeLocalString(dateStr: string | Date, addDays = 0): string {
   if (!dateStr) return '';
   const d = new Date(dateStr);
   if (isNaN(d.getTime())) return '';
-  d.setDate(d.getDate() + addDays);
-  const year = d.getFullYear();
-  const month = String(d.getMonth() + 1).padStart(2, '0');
-  const day = String(d.getDate()).padStart(2, '0');
-  const hours = String(d.getHours()).padStart(2, '0');
-  const minutes = String(d.getMinutes()).padStart(2, '0');
-  return `${year}-${month}-${day}T${hours}:${minutes}`;
+  const targetDate = new Date(d.getTime() + addDays * 24 * 60 * 60 * 1000);
+
+  const formatter = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Taipei',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  });
+  const parts = formatter.formatToParts(targetDate);
+  const get = (type: string) => parts.find((p) => p.type === type)?.value || '00';
+  const year = get('year');
+  const month = get('month');
+  const day = get('day');
+  let hour = get('hour');
+  if (hour === '24') hour = '00';
+  const minute = get('minute');
+
+  return `${year}-${month}-${day}T${hour}:${minute}`;
 }
 
 function AdminDashboardContent() {
@@ -443,7 +457,7 @@ function AdminDashboardContent() {
                 <option value="" disabled>點此選擇欲沿用的舊場次...</option>
                 {sessions.map((s) => (
                   <option key={s.id} value={s.id}>
-                    {s.title} ({new Date(s.start_time).toLocaleDateString('zh-TW', { weekday: 'short', month: 'numeric', day: 'numeric' })})
+                    {s.title} ({new Date(s.start_time).toLocaleDateString('zh-TW', { timeZone: 'Asia/Taipei', weekday: 'short', month: 'numeric', day: 'numeric' })})
                   </option>
                 ))}
               </select>

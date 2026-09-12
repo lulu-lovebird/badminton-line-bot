@@ -247,9 +247,9 @@ function SessionListContent() {
                   <div className="flex items-center gap-2">
                     <Clock size={14} className="text-slate-400 shrink-0" />
                     <span>
-                      {start.toLocaleDateString('zh-TW', { weekday: 'short', month: 'numeric', day: 'numeric' })}{' '}
-                      {start.toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit', hour12: false })} -{' '}
-                      {end.toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit', hour12: false })}
+                      {start.toLocaleDateString('zh-TW', { timeZone: 'Asia/Taipei', weekday: 'short', month: 'numeric', day: 'numeric' })}{' '}
+                      {start.toLocaleTimeString('zh-TW', { timeZone: 'Asia/Taipei', hour: '2-digit', minute: '2-digit', hour12: false })} -{' '}
+                      {end.toLocaleTimeString('zh-TW', { timeZone: 'Asia/Taipei', hour: '2-digit', minute: '2-digit', hour12: false })}
                     </span>
                   </div>
 

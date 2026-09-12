@@ -14,17 +14,31 @@ export function createSessionFlexMessage(session: MatchSession, liffBaseUrl: str
   const startDate = new Date(session.start_time);
   const endDate = new Date(session.end_time);
 
-  // 格式化日期與星期
-  const days = ['日', '一', '二', '三', '四', '五', '六'];
-  const month = startDate.getMonth() + 1;
-  const day = startDate.getDate();
-  const dayOfWeek = days[startDate.getDay()];
-  const startHours = startDate.getHours().toString().padStart(2, '0');
-  const startMins = startDate.getMinutes().toString().padStart(2, '0');
-  const endHours = endDate.getHours().toString().padStart(2, '0');
-  const endMins = endDate.getMinutes().toString().padStart(2, '0');
+  // 格式化日期與星期 (強制使用 Asia/Taipei 台灣時區)
+  const formatTaipei = (date: Date) => {
+    const formatter = new Intl.DateTimeFormat('zh-TW', {
+      timeZone: 'Asia/Taipei',
+      month: 'numeric',
+      day: 'numeric',
+      weekday: 'short',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false,
+    });
+    const parts = formatter.formatToParts(date);
+    const get = (type: string) => parts.find((p) => p.type === type)?.value || '';
+    return {
+      month: get('month'),
+      day: get('day'),
+      weekday: get('weekday').replace(/週|星期/, ''),
+      hours: get('hour') === '24' ? '00' : get('hour'),
+      mins: get('minute'),
+    };
+  };
 
-  const timeStr = `${month}/${day} (${dayOfWeek}) ${startHours}:${startMins} - ${endHours}:${endMins}`;
+  const s = formatTaipei(startDate);
+  const e = formatTaipei(endDate);
+  const timeStr = `${s.month}/${s.day} (${s.weekday}) ${s.hours}:${s.mins} - ${e.hours}:${e.mins}`;
   const matchTypeStr = session.match_type === 'single' ? '單打' : '雙打';
 
   const isFull = session.status === 'full';

@@ -81,6 +81,16 @@ export async function GET(req: NextRequest) {
   }
 }
 
+// 將台灣時間 YYYY-MM-DDTHH:mm 或未具備時區之字串標準化為帶時區的標準 ISO 字串 (假設台灣時區 +08:00)
+function toTaipeiISOString(dateStr: string): string {
+  if (!dateStr) return dateStr;
+  if (/[Z+-]\d{2}(:\d{2})?$/.test(dateStr) || dateStr.endsWith('Z')) {
+    return new Date(dateStr).toISOString();
+  }
+  const normalized = dateStr.length === 16 ? `${dateStr}:00+08:00` : `${dateStr}+08:00`;
+  return new Date(normalized).toISOString();
+}
+
 // 團主建立新場次
 export async function POST(req: NextRequest) {
   try {
@@ -119,7 +129,7 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    // 3. 建立場次
+    // 3. 建立場次 (確保日期時間以台灣時區標準化存入 TIMESTAMPTZ)
     const { data: session, error } = await supabaseAdmin
       .from('match_sessions')
       .insert({
@@ -127,8 +137,8 @@ export async function POST(req: NextRequest) {
         group_id: group_id || null,
         title,
         match_type: match_type || 'double',
-        start_time,
-        end_time,
+        start_time: toTaipeiISOString(start_time),
+        end_time: toTaipeiISOString(end_time),
         location,
         court_info,
         max_players: Number(max_players) || 8,
@@ -137,7 +147,7 @@ export async function POST(req: NextRequest) {
         shuttlecock,
         fee: Number(fee) || 200,
         notes,
-        cancel_deadline,
+        cancel_deadline: cancel_deadline ? toTaipeiISOString(cancel_deadline) : null,
         status: 'open',
       })
       .select()
