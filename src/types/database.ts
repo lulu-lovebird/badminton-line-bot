@@ -1,9 +1,26 @@
-export type UserRole = 'member' | 'host' | 'admin';
+export type UserRole = 'member' | 'pending_host' | 'host' | 'admin';
 export type MatchType = 'single' | 'double';
 export type SessionStatus = 'open' | 'full' | 'closed' | 'cancelled';
 export type RegistrationStatus = 'main' | 'waitlist' | 'cancelled';
 export type PaymentStatus = 'unpaid' | 'paid';
 export type AttendanceStatus = 'pending' | 'attended' | 'absent';
+export type ApplicationStatus = 'pending' | 'approved' | 'rejected';
+
+export interface HostApplication {
+  id: string;
+  user_id: string;
+  display_name: string;
+  picture_url?: string;
+  reason?: string;
+  status: ApplicationStatus;
+  review_notes?: string;
+  reviewed_by?: string;
+  reviewed_at?: string;
+  created_at: string;
+  updated_at?: string;
+  // Joined fields
+  user?: User;
+}
 
 export interface User {
   line_user_id: string;

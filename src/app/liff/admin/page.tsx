@@ -3,7 +3,7 @@
 import React, { useState, useEffect, Suspense } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
-import { PlusCircle, Users, CheckCircle, Clock, MapPin, Send, AlertCircle, RefreshCw, ShieldAlert, Key, Copy, Shield } from 'lucide-react';
+import { PlusCircle, Users, CheckCircle, Clock, MapPin, Send, AlertCircle, RefreshCw, ShieldAlert, Key, Copy, Shield, UserPlus, FileText } from 'lucide-react';
 import { MatchSession, Registration } from '@/types/database';
 import { initLiff } from '@/lib/liff-client';
 
@@ -48,6 +48,17 @@ function AdminDashboardContent() {
   const [userProfile, setUserProfile] = useState<{ line_user_id: string; display_name: string; role: string } | null>(null);
   const [idToken, setIdToken] = useState<string>('');
   const [authError, setAuthError] = useState<string>('');
+
+  // 團主申請狀態
+  const [application, setApplication] = useState<{
+    id?: string;
+    status: string;
+    reason?: string;
+    review_notes?: string;
+    created_at?: string;
+  } | null>(null);
+  const [applyReason, setApplyReason] = useState('');
+  const [isApplying, setIsApplying] = useState(false);
 
   // 緊急廣播訊息狀態
   const [broadcastMsg, setBroadcastMsg] = useState('');
@@ -145,8 +156,18 @@ function AdminDashboardContent() {
           fetchSessions(token, user.line_user_id);
           return;
         } else {
-          setAuthError(`您的身分目前是【一般球友】(ID: ${user.line_user_id})，尚未取得團主權限。`);
+          setAuthError(`您的身分目前是【一般球友】(ID: ${user.line_user_id})，尚未取得團主開團權限。`);
           setIsAuthorized(false);
+          // 查詢該球友是否已有團主申請紀錄
+          try {
+            const appRes = await fetch(`/api/host-applications?userId=${user.line_user_id}`, { headers });
+            if (appRes.ok) {
+              const appData = await appRes.json();
+              if (appData.applications && appData.applications.length > 0) {
+                setApplication(appData.applications[0]);
+              }
+            }
+          } catch {}
           return;
         }
       } else {
@@ -336,6 +357,41 @@ function AdminDashboardContent() {
     }
   }
 
+  async function handleApplyHost() {
+    if (!userProfile?.line_user_id) return;
+    setIsApplying(true);
+    try {
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      if (idToken) headers['Authorization'] = `Bearer ${idToken}`;
+      else if (userProfile?.line_user_id) headers['x-test-user-id'] = userProfile.line_user_id;
+
+      const res = await fetch('/api/host-applications', {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          user_id: userProfile.line_user_id,
+          display_name: userProfile.display_name,
+          reason: applyReason.trim(),
+        }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        alert('🎉 團主資格申請已成功送出！請靜待系統最高管理員審核。');
+        setApplication({
+          status: 'pending',
+          reason: applyReason.trim(),
+          created_at: new Date().toISOString(),
+        });
+      } else {
+        alert(data.error || '申請送出失敗');
+      }
+    } catch (e: unknown) {
+      alert((e as Error).message || '連線失敗');
+    } finally {
+      setIsApplying(false);
+    }
+  }
+
   if (loading) {
     return (
       <main className="min-h-screen bg-slate-100 p-6 flex flex-col items-center justify-center text-center">
@@ -346,23 +402,26 @@ function AdminDashboardContent() {
   }
 
   if (isAuthorized === false) {
+    const isPending = application?.status === 'pending';
+    const isRejected = application?.status === 'rejected';
+
     return (
-      <main className="min-h-screen bg-slate-100 p-6 flex flex-col items-center justify-center text-center">
-        <ShieldAlert size={52} className="text-amber-500 mb-3" />
-        <h2 className="text-lg font-bold text-slate-800">尚未開通團主權限</h2>
-        <p className="text-xs text-slate-600 mt-2 max-w-xs leading-relaxed">
-          {authError || '此頁面僅限零打團主與社團管理員進入。'}
+      <main className="min-h-screen bg-slate-100 p-6 flex flex-col items-center justify-center text-center max-w-sm mx-auto">
+        <ShieldAlert size={48} className="text-amber-500 mb-2" />
+        <h2 className="text-lg font-bold text-slate-800">尚未開通團主開團權限</h2>
+        <p className="text-xs text-slate-600 mt-1 max-w-xs leading-relaxed">
+          {authError || '此頁面僅限開團團主與社團管理員發布場次。'}
         </p>
 
         {userProfile && (
-          <div className="mt-4 p-3.5 bg-white rounded-2xl border border-slate-200 text-left text-xs max-w-xs w-full shadow-sm">
+          <div className="mt-4 p-3.5 bg-white rounded-2xl border border-slate-200 text-left text-xs w-full shadow-sm">
             <div className="flex items-center gap-1.5 font-bold text-slate-700 mb-1.5 border-b pb-1.5">
               <Key size={14} className="text-emerald-600" />
-              <span>您的目前 LINE 帳號資料</span>
+              <span>您的 LINE 帳號資料</span>
             </div>
             <div className="text-slate-500 space-y-1 text-[11px]">
               <div>暱稱：<span className="text-slate-800 font-bold">{userProfile.display_name}</span></div>
-              <div>身分角色：<span className="text-amber-600 font-bold">{userProfile.role}</span></div>
+              <div>身分：<span className="text-amber-600 font-bold">{isPending ? '團主審核中 (pending)' : userProfile.role}</span></div>
               <div className="break-all font-mono text-[10px] text-slate-400 mt-1">
                 LINE ID: {userProfile.line_user_id}
               </div>
@@ -370,19 +429,82 @@ function AdminDashboardContent() {
           </div>
         )}
 
+        {/* 審核中狀態提示 */}
+        {isPending && (
+          <div className="mt-3 p-3.5 bg-amber-50 rounded-2xl border border-amber-200 text-left text-xs w-full shadow-sm text-amber-900 space-y-1 animate-in fade-in">
+            <div className="font-bold flex items-center gap-1.5 text-amber-800">
+              <Clock size={15} />
+              <span>⏳ 團主資格審核中</span>
+            </div>
+            <p className="text-[11px] text-amber-700 leading-relaxed">
+              您的團主申請已成功送達最高管理員！審核通過後，系統將自動推播 LINE 通知給您，屆時即可直接在此建立零打場次！
+            </p>
+          </div>
+        )}
+
+        {/* 上次被駁回狀態提示 */}
+        {isRejected && (
+          <div className="mt-3 p-3.5 bg-red-50 rounded-2xl border border-red-200 text-left text-xs w-full shadow-sm text-red-900 space-y-1">
+            <div className="font-bold flex items-center gap-1.5 text-red-800">
+              <AlertCircle size={15} />
+              <span>上次申請未獲通過</span>
+            </div>
+            <p className="text-[11px] text-red-700 leading-relaxed">
+              說明理由：{application?.review_notes || '未符合資格'}
+            </p>
+            <p className="text-[10px] text-slate-500 pt-1">
+              若狀況已修正，您可以更新備註並重新提出申請。
+            </p>
+          </div>
+        )}
+
+        {/* 申請成為團主表單 (未申請或被駁回時可填寫) */}
+        {!isPending && (
+          <div className="mt-3 p-3.5 bg-white rounded-2xl border border-slate-200 text-left text-xs w-full shadow-sm space-y-2.5">
+            <div className="font-bold text-slate-800 flex items-center gap-1.5">
+              <UserPlus size={15} className="text-emerald-600" />
+              <span>{isRejected ? '重新申請成為團主' : '申請開通團主權限'}</span>
+            </div>
+            <p className="text-[11px] text-slate-500 leading-relaxed">
+              若您想在羽球社團中開團招募零打，請點擊下方按鈕提出申請，系統最高管理員將為您審核開通。
+            </p>
+            <div>
+              <label className="text-[10px] text-slate-400 font-bold block mb-1">
+                開團規劃 / 地點時段簡述 (選填)
+              </label>
+              <input
+                type="text"
+                placeholder="例：預計每週六晚上在秀朗國小開團雙打"
+                value={applyReason}
+                onChange={(e) => setApplyReason(e.target.value)}
+                className="w-full text-xs p-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500"
+              />
+            </div>
+            <button
+              type="button"
+              disabled={isApplying}
+              onClick={handleApplyHost}
+              className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white rounded-xl text-xs font-bold shadow transition-all flex items-center justify-center gap-1.5"
+            >
+              <Send size={14} />
+              <span>{isApplying ? '送出申請中...' : '📨 申請成為開團團主'}</span>
+            </button>
+          </div>
+        )}
+
         <div className="mt-4 flex flex-col gap-2 w-full max-w-xs">
           <button
             onClick={() => checkAdminAuth()}
-            className="w-full py-2.5 bg-emerald-600 text-white rounded-xl text-xs font-bold shadow-sm"
+            className="w-full py-2.5 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-xl text-xs font-bold shadow-xs transition-colors"
           >
-            重新整理並驗證
+            🔄 重新整理驗證身分
           </button>
-          <a
-            href="/liff/super-admin"
-            className="w-full py-2.5 bg-slate-800 text-white rounded-xl text-xs font-bold shadow-sm"
+          <Link
+            href="/liff"
+            className="w-full py-2.5 bg-slate-800 hover:bg-slate-900 text-white rounded-xl text-xs font-bold shadow-xs transition-colors"
           >
-            前往系統最高管理後台 (開通團主)
-          </a>
+            ← 返回 JuJu 導航大廳
+          </Link>
         </div>
       </main>
     );
@@ -394,19 +516,10 @@ function AdminDashboardContent() {
       <div className="flex items-center justify-between mb-3 px-1">
         <Link
           href={`/liff${urlGroupId ? `?groupId=${urlGroupId}` : ''}`}
-          className="text-xs text-slate-500 hover:text-slate-850 flex items-center gap-1 font-medium"
+          className="text-xs text-slate-500 hover:text-slate-800 flex items-center gap-1 font-medium"
         >
           <span>← 返回大廳</span>
         </Link>
-        {(userProfile?.role === 'admin' || (userProfile as any)?.is_super_admin) && (
-          <Link
-            href={`/liff/super-admin${urlGroupId ? `?groupId=${urlGroupId}` : ''}`}
-            className="inline-flex items-center gap-1.5 px-3 py-1 bg-gradient-to-r from-purple-700 to-indigo-700 hover:from-purple-800 hover:to-indigo-800 text-white rounded-xl text-xs font-bold shadow-sm transition-all"
-          >
-            <Shield size={13} className="text-purple-200" />
-            <span>👑 超級管理</span>
-          </Link>
-        )}
       </div>
 
       <div className="flex bg-white rounded-2xl p-1 shadow-sm mb-4 border border-slate-200">

@@ -2,14 +2,17 @@
 
 import React, { useState, useEffect, Suspense } from 'react';
 import Link from 'next/link';
-import { Shield, Users, Layers, Power, LogOut, CheckCircle, XCircle, RefreshCw, AlertTriangle, Key, ArrowLeft } from 'lucide-react';
-import { User, Group } from '@/types/database';
+import { Shield, Users, Layers, Power, LogOut, CheckCircle, XCircle, RefreshCw, AlertTriangle, Key, ArrowLeft, MailCheck, Clock, Check, X, Copy, MessageSquare } from 'lucide-react';
+import { User, Group, HostApplication } from '@/types/database';
 import { initLiff } from '@/lib/liff-client';
 
 function SuperAdminContent() {
-  const [activeTab, setActiveTab] = useState<'groups' | 'hosts'>('groups');
+  const [activeTab, setActiveTab] = useState<'applications' | 'groups' | 'hosts'>('applications');
   const [groups, setGroups] = useState<Group[]>([]);
   const [users, setUsers] = useState<User[]>([]);
+  const [applications, setApplications] = useState<HostApplication[]>([]);
+  const [pendingCount, setPendingCount] = useState<number>(0);
+  const [appFilter, setAppFilter] = useState<'all' | 'pending' | 'reviewed'>('pending');
   const [loading, setLoading] = useState(true);
   const [idToken, setIdToken] = useState<string>('');
   const [isAuthorized, setIsAuthorized] = useState<boolean | null>(null);
@@ -75,17 +78,81 @@ function SuperAdminContent() {
     else headers['x-test-user-id'] = 'super_admin_001';
 
     try {
-      const [groupsRes, usersRes] = await Promise.all([
+      const [groupsRes, usersRes, appsRes] = await Promise.all([
         fetch('/api/admin/groups', { headers }),
         fetch('/api/admin/users', { headers }),
+        fetch('/api/host-applications', { headers }),
       ]);
 
       if (groupsRes.ok) setGroups(await groupsRes.json());
       if (usersRes.ok) setUsers(await usersRes.json());
+      if (appsRes.ok) {
+        const appData = await appsRes.json();
+        setApplications(appData.applications || []);
+        setPendingCount(appData.pending_count || 0);
+      }
     } catch (e) {
       console.error(e);
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function handleApproveApplication(app: HostApplication) {
+    if (!window.confirm(`確定要核准【${app.display_name}】成為開團團主嗎？\n系統將會自動發送 LINE 推播通知給該球友。`)) return;
+    try {
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      if (idToken) headers['Authorization'] = `Bearer ${idToken}`;
+      else headers['x-test-user-id'] = 'super_admin_001';
+
+      const res = await fetch('/api/host-applications', {
+        method: 'PATCH',
+        headers,
+        body: JSON.stringify({
+          application_id: app.id,
+          user_id: app.user_id,
+          action: 'approve',
+        }),
+      });
+      if (res.ok) {
+        alert(`🎉 已成功核准【${app.display_name}】成為開團團主！`);
+        loadData();
+      } else {
+        const err = await res.json();
+        alert(err.error || '核准失敗');
+      }
+    } catch (e: unknown) {
+      alert((e as Error).message || '連線錯誤');
+    }
+  }
+
+  async function handleRejectApplication(app: HostApplication) {
+    const reason = window.prompt(`請輸入駁回【${app.display_name}】團主申請的原因說明 (將會以 LINE 通知給球友)：`, '目前團主名額已滿，請先聯繫管理員');
+    if (reason === null) return; // 球友取消輸入
+    try {
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      if (idToken) headers['Authorization'] = `Bearer ${idToken}`;
+      else headers['x-test-user-id'] = 'super_admin_001';
+
+      const res = await fetch('/api/host-applications', {
+        method: 'PATCH',
+        headers,
+        body: JSON.stringify({
+          application_id: app.id,
+          user_id: app.user_id,
+          action: 'reject',
+          review_notes: reason.trim() || '未符合目前資格',
+        }),
+      });
+      if (res.ok) {
+        alert(`已駁回【${app.display_name}】之申請。`);
+        loadData();
+      } else {
+        const err = await res.json();
+        alert(err.error || '駁回失敗');
+      }
+    } catch (e: unknown) {
+      alert((e as Error).message || '連線錯誤');
     }
   }
 
@@ -238,26 +305,180 @@ function SuperAdminContent() {
 
       <div className="flex bg-white rounded-2xl p-1 shadow-sm mb-4 border border-slate-200">
         <button
+          onClick={() => setActiveTab('applications')}
+          className={`flex-1 py-2 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1 relative ${
+            activeTab === 'applications'
+              ? 'bg-purple-700 text-white shadow'
+              : 'text-slate-600 hover:bg-slate-50'
+          }`}
+        >
+          <MailCheck size={14} />
+          <span>團主審核</span>
+          {pendingCount > 0 && (
+            <span className="ml-1 px-1.5 py-0.2 bg-red-500 text-white rounded-full text-[10px] font-bold animate-pulse">
+              {pendingCount}
+            </span>
+          )}
+        </button>
+        <button
           onClick={() => setActiveTab('groups')}
-          className={`flex-1 py-2 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${
+          className={`flex-1 py-2 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1 ${
             activeTab === 'groups'
               ? 'bg-slate-800 text-white shadow'
               : 'text-slate-600 hover:bg-slate-50'
           }`}
         >
-          <Layers size={14} /> 群組授權管理 ({groups.length})
+          <Layers size={14} /> 群組授權 ({groups.length})
         </button>
         <button
           onClick={() => setActiveTab('hosts')}
-          className={`flex-1 py-2 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${
+          className={`flex-1 py-2 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1 ${
             activeTab === 'hosts'
               ? 'bg-slate-800 text-white shadow'
               : 'text-slate-600 hover:bg-slate-50'
           }`}
         >
-          <Users size={14} /> 團主名單管理 ({users.filter((u) => u.role === 'host').length})
+          <Users size={14} /> 團主名單 ({users.filter((u) => u.role === 'host').length})
         </button>
       </div>
+
+      {activeTab === 'applications' && (
+        <div className="space-y-3">
+          <div className="flex justify-between items-center px-1">
+            <div className="flex items-center gap-1.5">
+              <span className="text-xs font-bold text-slate-700">團主身分審核列表</span>
+              {pendingCount > 0 && (
+                <span className="px-2 py-0.5 bg-amber-100 text-amber-800 text-[10px] font-bold rounded-full border border-amber-200">
+                  {pendingCount} 筆待審核
+                </span>
+              )}
+            </div>
+            <button onClick={() => loadData()} className="text-slate-400 hover:text-slate-600">
+              <RefreshCw size={14} />
+            </button>
+          </div>
+
+          {/* 篩選切換列 */}
+          <div className="flex gap-1.5 p-1 bg-slate-200/70 rounded-xl text-[11px] font-bold text-slate-600">
+            <button
+              onClick={() => setAppFilter('pending')}
+              className={`flex-1 py-1 rounded-lg transition-all ${
+                appFilter === 'pending' ? 'bg-white text-slate-800 shadow-2xs' : 'hover:text-slate-900'
+              }`}
+            >
+              ⏳ 待審核 ({pendingCount})
+            </button>
+            <button
+              onClick={() => setAppFilter('all')}
+              className={`flex-1 py-1 rounded-lg transition-all ${
+                appFilter === 'all' ? 'bg-white text-slate-800 shadow-2xs' : 'hover:text-slate-900'
+              }`}
+            >
+              全部 ({applications.length})
+            </button>
+            <button
+              onClick={() => setAppFilter('reviewed')}
+              className={`flex-1 py-1 rounded-lg transition-all ${
+                appFilter === 'reviewed' ? 'bg-white text-slate-800 shadow-2xs' : 'hover:text-slate-900'
+              }`}
+            >
+              已處理 ({applications.filter((a) => a.status !== 'pending').length})
+            </button>
+          </div>
+
+          {loading ? (
+            <div className="text-center py-10 text-xs text-slate-400">載入審核名單中...</div>
+          ) : (() => {
+            const filtered = applications.filter((a) => {
+              if (appFilter === 'pending') return a.status === 'pending';
+              if (appFilter === 'reviewed') return a.status !== 'pending';
+              return true;
+            });
+
+            if (filtered.length === 0) {
+              return (
+                <div className="text-center py-10 bg-white rounded-2xl border text-xs text-slate-500">
+                  {appFilter === 'pending' ? '🎉 目前沒有待審核的團主申請' : '尚無申請紀錄'}
+                </div>
+              );
+            }
+
+            return filtered.map((app) => (
+              <div
+                key={app.id || app.user_id}
+                className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm space-y-2.5"
+              >
+                <div className="flex items-center justify-between">
+                  <span
+                    className={`text-[10px] px-2.5 py-0.5 rounded-full font-bold ${
+                      app.status === 'pending'
+                        ? 'bg-amber-100 text-amber-800'
+                        : app.status === 'approved'
+                        ? 'bg-emerald-100 text-emerald-800'
+                        : 'bg-red-100 text-red-800'
+                    }`}
+                  >
+                    {app.status === 'pending'
+                      ? '⏳ 待審核'
+                      : app.status === 'approved'
+                      ? '✅ 已核准'
+                      : '❌ 已駁回'}
+                  </span>
+                  <span className="text-[10px] text-slate-400">
+                    {app.created_at ? new Date(app.created_at).toLocaleString('zh-TW', { timeZone: 'Asia/Taipei' }) : ''}
+                  </span>
+                </div>
+
+                <div>
+                  <div className="flex items-center justify-between">
+                    <span className="font-bold text-sm text-slate-800">{app.display_name}</span>
+                    <button
+                      onClick={() => {
+                        navigator.clipboard?.writeText(app.user_id);
+                        alert(`已複製 LINE ID: ${app.user_id}`);
+                      }}
+                      className="text-[10px] text-slate-400 hover:text-slate-600 flex items-center gap-1 font-mono"
+                    >
+                      <Copy size={11} /> 複製 ID
+                    </button>
+                  </div>
+                  <div className="text-[11px] text-slate-400 font-mono mt-0.5 break-all">
+                    ID: {app.user_id}
+                  </div>
+                </div>
+
+                <div className="bg-slate-50 p-2.5 rounded-xl border border-slate-100 text-xs text-slate-700">
+                  <div className="font-bold text-[10px] text-slate-400 mb-1">申請開團說明 / 自述：</div>
+                  <p className="leading-relaxed">{app.reason || '(未填寫說明)'}</p>
+                </div>
+
+                {app.review_notes && (
+                  <div className="bg-amber-50/70 p-2 rounded-xl border border-amber-100 text-[11px] text-amber-900">
+                    <span className="font-bold">審核備註：</span>{app.review_notes}
+                  </div>
+                )}
+
+                {app.status === 'pending' && (
+                  <div className="flex items-center gap-2 pt-1 border-t border-slate-100">
+                    <button
+                      onClick={() => handleApproveApplication(app)}
+                      className="flex-1 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl text-xs shadow-xs transition-colors flex items-center justify-center gap-1"
+                    >
+                      <Check size={14} /> ✅ 核准為團主
+                    </button>
+                    <button
+                      onClick={() => handleRejectApplication(app)}
+                      className="flex-1 py-2 bg-red-50 hover:bg-red-100 text-red-700 border border-red-200 font-bold rounded-xl text-xs transition-colors flex items-center justify-center gap-1"
+                    >
+                      <X size={14} /> ❌ 駁回申請
+                    </button>
+                  </div>
+                )}
+              </div>
+            ));
+          })()}
+        </div>
+      )}
 
       {activeTab === 'groups' && (
         <div className="space-y-3">
