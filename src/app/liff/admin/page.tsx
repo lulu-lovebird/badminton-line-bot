@@ -3,7 +3,7 @@
 import React, { useState, useEffect, Suspense } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
-import { PlusCircle, Users, CheckCircle, Clock, MapPin, Send, AlertCircle, RefreshCw, ShieldAlert, Key, Copy, Shield, UserPlus, FileText, User } from 'lucide-react';
+import { PlusCircle, Users, CheckCircle, Clock, MapPin, Send, AlertCircle, RefreshCw, ShieldAlert, Key, Copy, Shield, UserPlus, FileText, User, Share2 } from 'lucide-react';
 import { MatchSession, Registration } from '@/types/database';
 import { initLiff } from '@/lib/liff-client';
 
@@ -60,9 +60,11 @@ function AdminDashboardContent() {
   const [applyReason, setApplyReason] = useState('');
   const [isApplying, setIsApplying] = useState(false);
 
-  // 緊急廣播訊息狀態
+  // 緊急廣播與群組推播狀態
   const [broadcastMsg, setBroadcastMsg] = useState('');
   const [isBroadcasting, setIsBroadcasting] = useState(false);
+  const [availableGroups, setAvailableGroups] = useState<{ group_id: string; group_name: string }[]>([]);
+  const [isPushingCard, setIsPushingCard] = useState(false);
 
   // 代報名表單狀態
   const [proxyName, setProxyName] = useState('');
@@ -154,6 +156,17 @@ function AdminDashboardContent() {
         if (user.role === 'host' || user.role === 'admin' || user.is_super_admin) {
           setIsAuthorized(true);
           fetchSessions(token, user.line_user_id);
+          // 載入可用羽球群組供開團選取
+          try {
+            const gRes = await fetch('/api/groups');
+            if (gRes.ok) {
+              const gList = await gRes.json();
+              setAvailableGroups(gList);
+              if (!urlGroupId && gList.length > 0) {
+                setForm((prev) => ({ ...prev, group_id: prev.group_id || gList[0].group_id }));
+              }
+            }
+          } catch {}
           return;
         } else {
           setAuthError(`您的身分目前是【一般球友】(ID: ${user.line_user_id})，尚未取得團主開團權限。`);
@@ -325,6 +338,43 @@ function AdminDashboardContent() {
       console.error(e);
     } finally {
       setIsBroadcasting(false);
+    }
+  }
+
+  async function handlePushCardToGroup(session: MatchSession) {
+    const destGroup = session.group_id || form.group_id || availableGroups[0]?.group_id;
+    if (!destGroup) {
+      alert('目前無可用群組，請先將機器人邀請加入球隊群組！');
+      return;
+    }
+    const groupName = availableGroups.find((g) => g.group_id === destGroup)?.group_name || '群組';
+    if (!window.confirm(`確定要將「${session.title}」的開團報名卡片推播發送至【${groupName}】嗎？`)) return;
+
+    setIsPushingCard(true);
+    try {
+      const res = await fetch('/api/notify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          session_id: session.id,
+          action: 'push_card_to_group',
+          target_group_id: destGroup,
+        }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        alert(data.message || '🎉 開團卡片已成功推播至群組！');
+        fetchSessions(idToken, userProfile?.line_user_id);
+        if (selectedSession && selectedSession.id === session.id) {
+          setSelectedSession({ ...selectedSession, group_id: destGroup });
+        }
+      } else {
+        alert(data.error || '推播失敗');
+      }
+    } catch (err: unknown) {
+      alert((err as Error).message || '連線失敗');
+    } finally {
+      setIsPushingCard(false);
     }
   }
 
@@ -598,11 +648,34 @@ function AdminDashboardContent() {
             </div>
           )}
 
-          {urlGroupId && (
-            <div className="bg-slate-50 p-2 rounded text-xs text-slate-500">
-              📌 本場次將綁定並發布至指定群組
-            </div>
-          )}
+          <div>
+            <label className="text-xs font-semibold text-slate-600 flex items-center justify-between">
+              <span>發布推播目標群組</span>
+              {form.group_id ? (
+                <span className="text-[11px] text-emerald-600 font-medium">✓ 開團後將自動發送卡片至該群</span>
+              ) : (
+                <span className="text-[11px] text-amber-600 font-medium">⚠️ 尚未選擇目標群組</span>
+              )}
+            </label>
+            <select
+              value={form.group_id}
+              onChange={(e) => setForm({ ...form, group_id: e.target.value })}
+              className="w-full text-xs border border-slate-200 rounded-lg p-2.5 mt-1 bg-white font-medium text-slate-700 outline-none focus:border-emerald-500"
+            >
+              {availableGroups.length > 0 ? (
+                <>
+                  {availableGroups.map((g) => (
+                    <option key={g.group_id} value={g.group_id}>
+                      🏸 {g.group_name || '羽球社團群組'}
+                    </option>
+                  ))}
+                  <option value="">🚫 僅建立場次（不推播至任何群組）</option>
+                </>
+              ) : (
+                <option value="">尚無可用群組 (僅建立場次)</option>
+              )}
+            </select>
+          </div>
 
           <div>
             <label className="text-xs font-semibold text-slate-600">場次名稱 / 標題</label>
@@ -789,19 +862,34 @@ function AdminDashboardContent() {
                     </div>
                   </div>
 
-                  <div className="mt-3 pt-2 border-t border-slate-100 flex justify-between items-center text-[11px]">
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleCopySessionToNextWeek(s);
-                      }}
-                      className="px-2.5 py-1 bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200 rounded-lg font-bold flex items-center gap-1 active:scale-95 transition-all text-xs"
-                      title="直接沿用此場次所有設定，順延 7 天開下週團"
-                    >
-                      <Copy size={13} className="text-amber-600" />
-                      <span>複製到下週 (+7天)</span>
-                    </button>
+                  <div className="mt-3 pt-2 border-t border-slate-100 flex justify-between items-center text-[11px] gap-1 flex-wrap">
+                    <div className="flex items-center gap-1.5">
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleCopySessionToNextWeek(s);
+                        }}
+                        className="px-2.5 py-1 bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200 rounded-lg font-bold flex items-center gap-1 active:scale-95 transition-all text-xs"
+                        title="直接沿用此場次所有設定，順延 7 天開下週團"
+                      >
+                        <Copy size={13} className="text-amber-600" />
+                        <span>複製到下週 (+7天)</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handlePushCardToGroup(s);
+                        }}
+                        disabled={isPushingCard}
+                        className="px-2 py-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 rounded-lg font-medium flex items-center gap-1 active:scale-95 transition-all text-xs"
+                        title="發送或補發此場次的報名卡片至群組"
+                      >
+                        <Share2 size={12} className="text-emerald-600" />
+                        <span>推播卡片</span>
+                      </button>
+                    </div>
                     <span className="text-emerald-600 font-bold">管理名單 →</span>
                   </div>
                 </div>
@@ -839,6 +927,29 @@ function AdminDashboardContent() {
               </span>
             </div>
             <p className="text-xs text-slate-500 mt-1">{selectedSession.location}</p>
+
+            {/* 📢 推播開團卡片至 LINE 群組 */}
+            <div className="mt-3 pt-3 border-t border-slate-100 flex items-center justify-between gap-2">
+              <div>
+                <div className="text-xs font-bold text-slate-700 flex items-center gap-1">
+                  <Share2 size={13} className="text-emerald-600" /> 群組開團卡片
+                </div>
+                <div className="text-[11px] text-slate-400">
+                  {selectedSession.group_id
+                    ? `發布目標：${availableGroups.find((g) => g.group_id === selectedSession.group_id)?.group_name || '已綁定群組'}`
+                    : '目前尚未發送至任何群組'}
+                </div>
+              </div>
+              <button
+                type="button"
+                disabled={isPushingCard}
+                onClick={() => handlePushCardToGroup(selectedSession)}
+                className="px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 text-emerald-800 rounded-lg text-xs font-bold flex items-center gap-1 active:scale-95 transition-all shadow-xs disabled:opacity-50"
+              >
+                <Send size={13} className="text-emerald-600" />
+                <span>{isPushingCard ? '推播中...' : '📢 立即推播/補發卡片'}</span>
+              </button>
+            </div>
 
             <div className="mt-3 pt-3 border-t border-slate-100">
               <label className="text-xs font-bold text-slate-700 flex items-center gap-1">

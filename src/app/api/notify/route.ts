@@ -1,14 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
-import { lineClient } from '@/lib/line';
+import { lineClient, createSessionFlexMessage } from '@/lib/line';
 
-// 團主向某個場次的所有球友推播緊急訊息
+// 團主通知 API：支援推播群組開團卡片 或 向場次球友發送私訊通知
 export async function POST(req: NextRequest) {
   try {
-    const { session_id, message } = await req.json();
+    const body = await req.json();
+    const { session_id, message, action, target_group_id } = body;
 
-    if (!session_id || !message) {
-      return NextResponse.json({ error: 'Missing parameters' }, { status: 400 });
+    if (!session_id) {
+      return NextResponse.json({ error: 'Missing session_id' }, { status: 400 });
     }
 
     // 1. 取得該場次資料
@@ -20,6 +21,62 @@ export async function POST(req: NextRequest) {
 
     if (!session) {
       return NextResponse.json({ error: '場次不存在' }, { status: 404 });
+    }
+
+    // 動作 A: 將該場次的 Flex Card 推播 / 補發到指定的 LINE 群組
+    if (action === 'push_card_to_group') {
+      const destinationGroupId = target_group_id || session.group_id;
+      if (!destinationGroupId) {
+        return NextResponse.json({ error: '請指定要推播的目標 LINE 群組' }, { status: 400 });
+      }
+
+      // 取得團主姓名與頭像
+      const { data: hostUser } = await supabaseAdmin
+        .from('users')
+        .select('display_name, picture_url')
+        .eq('line_user_id', session.host_user_id)
+        .maybeSingle();
+
+      let hostName = hostUser?.display_name;
+      let hostPic = hostUser?.picture_url;
+      if (!hostName || hostName === '團主' || hostName === '球友') {
+        try {
+          const profile = await lineClient.getProfile(session.host_user_id);
+          if (profile?.displayName) {
+            hostName = profile.displayName;
+            hostPic = profile.pictureUrl || null;
+          }
+        } catch {}
+      }
+
+      const sessionWithHost = {
+        ...session,
+        host_name: hostName || '球團主揪',
+        host_picture_url: hostPic || null,
+      };
+
+      const liffUrl = process.env.NEXT_PUBLIC_LIFF_URL || '';
+      const flexMsg = createSessionFlexMessage(sessionWithHost, liffUrl);
+
+      await lineClient.pushMessage({
+        to: destinationGroupId,
+        messages: [flexMsg],
+      });
+
+      // 同步更新 session.group_id
+      if (session.group_id !== destinationGroupId) {
+        await supabaseAdmin
+          .from('match_sessions')
+          .update({ group_id: destinationGroupId })
+          .eq('id', session.id);
+      }
+
+      return NextResponse.json({ success: true, message: '🎉 開團卡片已成功推播至群組！' });
+    }
+
+    // 動作 B: 緊急通知場次所有球友 (一對一私訊)
+    if (!message) {
+      return NextResponse.json({ error: '請輸入通知訊息內容' }, { status: 400 });
     }
 
     // 2. 取得所有正取球友 (包含備取)
