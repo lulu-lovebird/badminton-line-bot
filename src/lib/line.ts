@@ -93,6 +93,14 @@ export function createSessionFlexMessage(session: MatchSession, liffBaseUrl: str
             type: 'box' as const,
             layout: 'horizontal' as const,
             contents: [
+              { type: 'text' as const, text: '👤 主揪', color: '#888888', size: 'sm' as const, flex: 2 },
+              { type: 'text' as const, text: session.host_name || '球團團主', color: '#1B5E20', size: 'sm' as const, weight: 'bold' as const, flex: 5 },
+            ],
+          },
+          {
+            type: 'box' as const,
+            layout: 'horizontal' as const,
+            contents: [
               { type: 'text' as const, text: '📍 地點', color: '#888888', size: 'sm' as const, flex: 2 },
               { type: 'text' as const, text: `${session.location} ${session.court_info || ''}`, color: '#333333', size: 'sm' as const, flex: 5, wrap: true },
             ],

@@ -301,7 +301,19 @@ export async function POST(req: NextRequest) {
               messages: [{ type: 'text', text: '目前暫無開放中的零打場次，請靜待各團團主開團！🏸' }],
             });
           } else {
-            const flexBubbles = sessions.map((s) => createSessionFlexMessage(s, liffBaseUrl).contents);
+            const hostUserIds = Array.from(new Set(sessions.map((s) => s.host_user_id).filter(Boolean)));
+            const { data: hostUsers } = await supabaseAdmin
+              .from('users')
+              .select('line_user_id, display_name')
+              .in('line_user_id', hostUserIds);
+            const hostMap = new Map((hostUsers || []).map((u) => [u.line_user_id, u.display_name]));
+
+            const sessionsWithHost = sessions.map((s) => ({
+              ...s,
+              host_name: hostMap.get(s.host_user_id) || '球團主揪',
+            }));
+
+            const flexBubbles = sessionsWithHost.map((s) => createSessionFlexMessage(s, liffBaseUrl).contents);
             await lineClient.replyMessage({
               replyToken,
               messages: [

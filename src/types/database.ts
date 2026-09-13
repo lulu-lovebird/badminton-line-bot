@@ -61,6 +61,8 @@ export interface MatchSession {
   created_at: string;
   updated_at: string;
   // Computed / Joined fields
+  host_name?: string;
+  host_picture_url?: string | null;
   current_players?: number;
   waitlist_count?: number;
   group?: Group;

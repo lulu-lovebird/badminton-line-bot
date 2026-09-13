@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { Calendar, MapPin, AlertTriangle, XCircle, Clock } from 'lucide-react';
+import { Calendar, MapPin, AlertTriangle, XCircle, Clock, User } from 'lucide-react';
 import { Registration } from '@/types/database';
 import { initLiff } from '@/lib/liff-client';
 
@@ -179,6 +179,11 @@ export default function MyRecordsPage() {
                 </h3>
 
                 <div className="space-y-1 text-xs text-slate-600">
+                  <div className="flex items-center gap-2">
+                    <User size={14} className="text-emerald-600 shrink-0" />
+                    <span>主揪團主：<strong className="text-slate-700">{session.host_name || '球團團主'}</strong></span>
+                  </div>
+
                   <div className="flex items-center gap-2">
                     <Clock size={14} className="text-slate-400 shrink-0" />
                     <span>

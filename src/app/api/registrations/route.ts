@@ -107,6 +107,13 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
+  const hostUserIds = Array.from(new Set((records || []).map((r) => r.session?.host_user_id).filter(Boolean)));
+  const { data: hostUsers } = await supabaseAdmin
+    .from('users')
+    .select('line_user_id, display_name')
+    .in('line_user_id', hostUserIds);
+  const hostMap = new Map((hostUsers || []).map((u) => [u.line_user_id, u.display_name]));
+
   const recordsWithConflict = (records || []).map((rec, i, arr) => {
     let hasConflict = false;
     if (rec.session && rec.status === 'main') {
@@ -125,8 +132,17 @@ export async function GET(req: NextRequest) {
         }
       }
     }
+
+    const sessionWithHost = rec.session
+      ? {
+          ...rec.session,
+          host_name: hostMap.get(rec.session.host_user_id) || '球團主揪',
+        }
+      : undefined;
+
     return {
       ...rec,
+      session: sessionWithHost,
       hasConflict,
     };
   });

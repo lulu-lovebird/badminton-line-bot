@@ -3,7 +3,7 @@
 import React, { useState, useEffect, Suspense } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
-import { PlusCircle, Users, CheckCircle, Clock, MapPin, Send, AlertCircle, RefreshCw, ShieldAlert, Key, Copy, Shield, UserPlus, FileText } from 'lucide-react';
+import { PlusCircle, Users, CheckCircle, Clock, MapPin, Send, AlertCircle, RefreshCw, ShieldAlert, Key, Copy, Shield, UserPlus, FileText, User } from 'lucide-react';
 import { MatchSession, Registration } from '@/types/database';
 import { initLiff } from '@/lib/liff-client';
 
@@ -590,7 +590,7 @@ function AdminDashboardContent() {
                 <option value="" disabled>點此選擇欲沿用的舊場次...</option>
                 {sessions.map((s) => (
                   <option key={s.id} value={s.id}>
-                    {s.title} ({new Date(s.start_time).toLocaleDateString('zh-TW', { timeZone: 'Asia/Taipei', weekday: 'short', month: 'numeric', day: 'numeric' })})
+                    {s.title} ({s.host_name ? `${s.host_name} • ` : ''}{new Date(s.start_time).toLocaleDateString('zh-TW', { timeZone: 'Asia/Taipei', weekday: 'short', month: 'numeric', day: 'numeric' })})
                   </option>
                 ))}
               </select>
@@ -758,7 +758,12 @@ function AdminDashboardContent() {
                   className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm hover:shadow transition-all cursor-pointer relative"
                 >
                   <div className="flex items-center justify-between mb-2">
-                    <span className="text-xs font-bold text-slate-800">{s.title}</span>
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <span className="text-xs font-bold text-slate-800">{s.title}</span>
+                      <span className="text-[11px] px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-800 border border-emerald-200 font-medium">
+                        👤 主揪：{s.host_name || '球團團主'}
+                      </span>
+                    </div>
                     <span
                       className={`text-xs px-2.5 py-0.5 rounded-full font-bold ${
                         isFull
@@ -826,7 +831,12 @@ function AdminDashboardContent() {
           </div>
 
           <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm">
-            <h2 className="font-bold text-slate-800 text-base">{selectedSession.title}</h2>
+            <div className="flex items-center justify-between gap-2 mb-1">
+              <h2 className="font-bold text-slate-800 text-base">{selectedSession.title}</h2>
+              <span className="text-xs px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-800 border border-emerald-200 font-semibold shrink-0">
+                👤 主揪：{selectedSession.host_name || '球團團主'}
+              </span>
+            </div>
             <p className="text-xs text-slate-500 mt-1">{selectedSession.location}</p>
 
             <div className="mt-3 pt-3 border-t border-slate-100">

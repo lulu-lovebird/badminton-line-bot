@@ -54,6 +54,14 @@ export async function GET(req: NextRequest) {
       .in('session_id', sessionIds)
       .neq('status', 'cancelled');
 
+    // 取得所有團主使用者資料以附加姓名與頭像
+    const hostUserIds = Array.from(new Set(sessions.map((s) => s.host_user_id).filter(Boolean)));
+    const { data: hostUsers } = await supabaseAdmin
+      .from('users')
+      .select('line_user_id, display_name, picture_url')
+      .in('line_user_id', hostUserIds);
+    const hostMap = new Map((hostUsers || []).map((u) => [u.line_user_id, u]));
+
     const computed = sessions.map((session) => {
       const sessionRegs = (regs || []).filter((r) => r.session_id === session.id);
       const mainCount = sessionRegs
@@ -62,9 +70,12 @@ export async function GET(req: NextRequest) {
       const waitlistCount = sessionRegs
         .filter((r) => r.status === 'waitlist')
         .reduce((sum, r) => sum + (r.party_size || 1), 0);
+      const host = hostMap.get(session.host_user_id);
 
       return {
         ...session,
+        host_name: host?.display_name || '球團主揪',
+        host_picture_url: host?.picture_url || null,
         current_players: mainCount,
         waitlist_count: waitlistCount,
       };
@@ -160,8 +171,21 @@ export async function POST(req: NextRequest) {
     // 4. 若有設定推播群組，自動發送 Flex Message
     const targetGroupId = notify_group_id || group_id;
     if (targetGroupId) {
+      // 取得團主姓名
+      const { data: hostUser } = await supabaseAdmin
+        .from('users')
+        .select('display_name, picture_url')
+        .eq('line_user_id', host_user_id)
+        .maybeSingle();
+
+      const sessionWithHost = {
+        ...session,
+        host_name: hostUser?.display_name || '球團主揪',
+        host_picture_url: hostUser?.picture_url || null,
+      };
+
       const liffUrl = process.env.NEXT_PUBLIC_LIFF_URL || '';
-      const flexMsg = createSessionFlexMessage(session, liffUrl);
+      const flexMsg = createSessionFlexMessage(sessionWithHost, liffUrl);
       try {
         await lineClient.pushMessage({
           to: targetGroupId,

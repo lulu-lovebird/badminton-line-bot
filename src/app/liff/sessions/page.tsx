@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useRef, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { Calendar, MapPin, DollarSign, Award, CheckCircle, AlertCircle, Clock, RefreshCw, Globe } from 'lucide-react';
+import { Calendar, MapPin, DollarSign, Award, CheckCircle, AlertCircle, Clock, RefreshCw, Globe, User } from 'lucide-react';
 import { MatchSession } from '@/types/database';
 import { useLiff } from '@/components/liff-provider';
 
@@ -227,9 +227,14 @@ function SessionListContent() {
                 className="bg-white rounded-2xl border border-slate-200 p-4 shadow-sm hover:shadow transition-all relative overflow-hidden"
               >
                 <div className="flex items-center justify-between mb-2">
-                  <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-slate-100 text-slate-700">
-                    {s.match_type === 'single' ? '單打' : '雙打'}
-                  </span>
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-slate-100 text-slate-700">
+                      {s.match_type === 'single' ? '單打' : '雙打'}
+                    </span>
+                    <span className="text-xs px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-800 border border-emerald-200 font-medium">
+                      👤 團主：{s.host_name || '球團團主'}
+                    </span>
+                  </div>
                   <span
                     className={`text-xs px-2.5 py-0.5 rounded-full font-bold ${
                       isFull
@@ -244,6 +249,11 @@ function SessionListContent() {
                 <h3 className="font-bold text-slate-800 text-base mb-2">{s.title}</h3>
 
                 <div className="space-y-1.5 text-xs text-slate-600">
+                  <div className="flex items-center gap-2">
+                    <User size={14} className="text-emerald-600 shrink-0" />
+                    <span>主揪團主：<strong className="text-slate-800">{s.host_name || '球團團主'}</strong></span>
+                  </div>
+
                   <div className="flex items-center gap-2">
                     <Clock size={14} className="text-slate-400 shrink-0" />
                     <span>
