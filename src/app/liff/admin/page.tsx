@@ -571,6 +571,12 @@ function AdminDashboardContent() {
         >
           <span>← 返回大廳</span>
         </Link>
+        <Link
+          href="/host-guide"
+          className="inline-flex items-center gap-1 px-2.5 py-1 bg-white hover:bg-slate-50 text-emerald-700 rounded-lg text-[11px] font-bold border border-emerald-200 shadow-2xs transition-colors"
+        >
+          <span>📖 團主使用手冊</span>
+        </Link>
       </div>
 
       <div className="flex bg-white rounded-2xl p-1 shadow-sm mb-4 border border-slate-200">

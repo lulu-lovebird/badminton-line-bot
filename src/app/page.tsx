@@ -48,13 +48,19 @@ export default function Home() {
           告別群組 +1 混亂刷屏！JuJu 整合 LINE LIFF，提供即時報名名額、自動遞補通知與團主開團後台，讓打球更輕鬆、開團更有效率。
         </p>
 
-        <div className="flex flex-col sm:flex-row items-center gap-3 w-full max-w-xs">
+        <div className="flex flex-col sm:flex-row items-center gap-3 w-full max-w-sm">
           <Link
             href="/liff"
-            className="w-full py-3.5 px-6 bg-emerald-600 hover:bg-emerald-700 text-white rounded-2xl font-bold text-sm shadow-md hover:shadow-lg transition-all flex items-center justify-center gap-2 group"
+            className="w-full sm:flex-1 py-3.5 px-5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-2xl font-bold text-sm shadow-md hover:shadow-lg transition-all flex items-center justify-center gap-2 group"
           >
             <span>進入 JuJu LIFF 大廳</span>
             <ArrowRight size={16} className="transition-transform group-hover:translate-x-1" />
+          </Link>
+          <Link
+            href="/host-guide"
+            className="w-full sm:flex-1 py-3.5 px-5 bg-white hover:bg-slate-50 text-slate-700 rounded-2xl font-bold text-sm shadow-xs border border-slate-200 transition-all flex items-center justify-center gap-1.5"
+          >
+            <span>📖 團主使用手冊</span>
           </Link>
         </div>
       </section>
@@ -65,7 +71,9 @@ export default function Home() {
           <div>
             © {new Date().getFullYear()} 羽球零打小幫手 JuJu. All rights reserved.
           </div>
-          <div className="flex items-center gap-4 font-medium">
+          <div className="flex items-center gap-4 font-medium flex-wrap justify-center">
+            <Link href="/host-guide" className="hover:text-emerald-600 transition-colors font-semibold text-emerald-700">團主使用手冊 (Host Guide)</Link>
+            <span>•</span>
             <Link href="/privacy" className="hover:text-emerald-600 transition-colors">隱私權政策 (Privacy Policy)</Link>
             <span>•</span>
             <Link href="/terms" className="hover:text-emerald-600 transition-colors">服務條款 (Terms of Use)</Link>

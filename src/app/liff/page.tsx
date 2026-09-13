@@ -3,7 +3,7 @@
 import React, { Suspense, useEffect } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
-import { Calendar, ClipboardList, Settings, Terminal, Shield, Sparkles } from 'lucide-react';
+import { Calendar, ClipboardList, Settings, Terminal, Shield, Sparkles, BookOpen } from 'lucide-react';
 import { useLiff } from '@/components/liff-provider';
 
 function LiffHubContent() {
@@ -125,6 +125,18 @@ function LiffHubContent() {
             <span className="text-xs font-bold bg-white/20 px-2 py-1 rounded-lg text-purple-100">管理 →</span>
           </Link>
         )}
+
+        {/* 📖 團主使用手冊 */}
+        <Link
+          href="/host-guide"
+          className="w-full p-3 bg-white hover:bg-slate-50 text-slate-700 rounded-2xl flex items-center justify-between transition-all text-xs border border-slate-200 shadow-2xs mt-2"
+        >
+          <div className="flex items-center gap-2 font-bold text-emerald-800">
+            <BookOpen size={16} className="text-emerald-600" />
+            <span>團主使用手冊 (新手開團完整教學)</span>
+          </div>
+          <span className="text-[11px] text-slate-400">閱讀 →</span>
+        </Link>
 
         {/* 系統除錯診斷 (僅在 DEBUG=on 時顯示) */}
         {process.env.NEXT_PUBLIC_DEBUG === 'on' && (
