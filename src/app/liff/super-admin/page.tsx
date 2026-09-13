@@ -18,6 +18,16 @@ function SuperAdminContent() {
   const [isAuthorized, setIsAuthorized] = useState<boolean | null>(null);
   const [debugInfo, setDebugInfo] = useState<any>(null);
 
+  // LINE Messaging API 推播額度監控狀態
+  const [quotaData, setQuotaData] = useState<{
+    type: string;
+    value: number | null;
+    totalUsage: number;
+    remaining: number | null;
+    usagePercentage: number;
+  } | null>(null);
+  const [loadingQuota, setLoadingQuota] = useState(false);
+
   useEffect(() => {
     document.title = '👑 系統最高管理後台';
     initAuth();
@@ -70,6 +80,22 @@ function SuperAdminContent() {
     }
   }
 
+  async function refreshQuota() {
+    setLoadingQuota(true);
+    try {
+      const headers: Record<string, string> = {};
+      if (idToken) headers['Authorization'] = `Bearer ${idToken}`;
+      else headers['x-test-user-id'] = 'super_admin_001';
+
+      const res = await fetch('/api/admin/quota', { headers });
+      if (res.ok) setQuotaData(await res.json());
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setLoadingQuota(false);
+    }
+  }
+
   async function loadData(token?: string) {
     setLoading(true);
     const currentToken = token || idToken;
@@ -78,10 +104,11 @@ function SuperAdminContent() {
     else headers['x-test-user-id'] = 'super_admin_001';
 
     try {
-      const [groupsRes, usersRes, appsRes] = await Promise.all([
+      const [groupsRes, usersRes, appsRes, quotaRes] = await Promise.all([
         fetch('/api/admin/groups', { headers }),
         fetch('/api/admin/users', { headers }),
         fetch('/api/host-applications', { headers }),
+        fetch('/api/admin/quota', { headers }),
       ]);
 
       if (groupsRes.ok) setGroups(await groupsRes.json());
@@ -90,6 +117,9 @@ function SuperAdminContent() {
         const appData = await appsRes.json();
         setApplications(appData.applications || []);
         setPendingCount(appData.pending_count || 0);
+      }
+      if (quotaRes.ok) {
+        setQuotaData(await quotaRes.json());
       }
     } catch (e) {
       console.error(e);
@@ -301,6 +331,110 @@ function SuperAdminContent() {
         <p className="text-slate-400 text-xs mt-1">
           管理各羽球社團群組使用權限、審核與開通團主資格
         </p>
+      </div>
+
+      {/* 📊 LINE Messaging API 每月免費推播額度監控卡片 */}
+      <div className="bg-white rounded-2xl p-4 shadow-sm mb-4 border border-slate-200">
+        <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center gap-2">
+            <div className="w-8 h-8 rounded-xl bg-emerald-100 text-emerald-600 flex items-center justify-center font-bold shadow-2xs">
+              <MessageSquare size={16} />
+            </div>
+            <div>
+              <h2 className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
+                <span>LINE Messaging API 推播額度</span>
+                <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-emerald-50 text-emerald-700 font-semibold border border-emerald-200">
+                  本月即時
+                </span>
+              </h2>
+              <p className="text-[10px] text-slate-400">官方帳號免費推播則數消耗統計</p>
+            </div>
+          </div>
+          <button
+            onClick={refreshQuota}
+            disabled={loadingQuota}
+            className="p-1.5 text-slate-400 hover:text-slate-600 rounded-lg hover:bg-slate-100 transition-all active:scale-95 flex items-center gap-1 text-[11px]"
+            title="重新整理推播額度"
+          >
+            <RefreshCw size={13} className={loadingQuota ? 'animate-spin text-emerald-600' : ''} />
+            <span className="text-[10px] text-slate-500 font-medium">更新</span>
+          </button>
+        </div>
+
+        {quotaData ? (
+          <div className="space-y-3">
+            {/* 數據三欄 */}
+            <div className="grid grid-cols-3 gap-2 text-center">
+              <div className="bg-slate-50 rounded-xl p-2.5 border border-slate-100">
+                <div className="text-[10px] text-slate-500 font-medium">每月上限</div>
+                <div className="text-base font-black text-slate-800 mt-0.5">
+                  {quotaData.value !== null ? `${quotaData.value}` : '無限制'}
+                  <span className="text-[10px] font-normal text-slate-400 ml-0.5">則</span>
+                </div>
+              </div>
+
+              <div className="bg-amber-50/70 rounded-xl p-2.5 border border-amber-100">
+                <div className="text-[10px] text-amber-700 font-medium">本月已使用</div>
+                <div className="text-base font-black text-amber-600 mt-0.5">
+                  {quotaData.totalUsage}
+                  <span className="text-[10px] font-normal text-amber-600/70 ml-0.5">則</span>
+                </div>
+              </div>
+
+              <div className="bg-emerald-50/70 rounded-xl p-2.5 border border-emerald-100">
+                <div className="text-[10px] text-emerald-700 font-medium">剩餘額度</div>
+                <div className="text-base font-black text-emerald-600 mt-0.5">
+                  {quotaData.remaining !== null ? `${quotaData.remaining}` : '充足'}
+                  <span className="text-[10px] font-normal text-emerald-600/70 ml-0.5">則</span>
+                </div>
+              </div>
+            </div>
+
+            {/* 進度條 */}
+            {quotaData.value !== null && (
+              <div className="space-y-1">
+                <div className="flex justify-between text-[11px]">
+                  <span className="text-slate-500">配額使用率</span>
+                  <span
+                    className={`font-bold ${
+                      quotaData.usagePercentage >= 90
+                        ? 'text-red-600'
+                        : quotaData.usagePercentage >= 75
+                        ? 'text-amber-600'
+                        : 'text-emerald-600'
+                    }`}
+                  >
+                    {quotaData.usagePercentage}% ({quotaData.totalUsage} / {quotaData.value} 則)
+                  </span>
+                </div>
+                <div className="w-full h-2 bg-slate-100 rounded-full overflow-hidden">
+                  <div
+                    className={`h-full transition-all duration-500 rounded-full ${
+                      quotaData.usagePercentage >= 90
+                        ? 'bg-red-500'
+                        : quotaData.usagePercentage >= 75
+                        ? 'bg-amber-500'
+                        : 'bg-emerald-500'
+                    }`}
+                    style={{ width: `${Math.max(2, quotaData.usagePercentage)}%` }}
+                  />
+                </div>
+              </div>
+            )}
+
+            {quotaData.remaining !== null && quotaData.remaining < 20 && (
+              <div className="p-2 bg-red-50 border border-red-200 rounded-lg text-[11px] text-red-700 flex items-center gap-1.5">
+                <AlertTriangle size={13} className="shrink-0" />
+                <span>免費推播額度即將用罄！請注意保留額度或至 LINE 官方帳號後台升級方案。</span>
+              </div>
+            )}
+          </div>
+        ) : (
+          <div className="text-center py-4 text-xs text-slate-400 flex items-center justify-center gap-2">
+            <RefreshCw size={14} className="animate-spin text-emerald-500" />
+            <span>正在讀取 LINE 推播配額中...</span>
+          </div>
+        )}
       </div>
 
       <div className="flex bg-white rounded-2xl p-1 shadow-sm mb-4 border border-slate-200">
