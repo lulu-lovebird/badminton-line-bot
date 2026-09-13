@@ -341,6 +341,7 @@ function AdminDashboardContent() {
         body: JSON.stringify({
           ...form,
           host_user_id: userProfile?.line_user_id || 'host_admin_001',
+          host_name: userProfile?.display_name,
           notify_group_id: form.group_id || undefined,
         }),
       });

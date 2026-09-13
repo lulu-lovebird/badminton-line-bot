@@ -3,6 +3,7 @@ import { supabaseAdmin } from '@/lib/supabase';
 import { cancelRegistrationAndPromote } from '@/lib/registration-service';
 import { verifyLineIdToken } from '@/lib/auth';
 import { isUserInGroup } from '@/lib/line-group-auth';
+import { lineClient } from '@/lib/line';
 
 async function getCallerIdentity(req: NextRequest): Promise<{ userId: string; role: string } | null> {
   const authHeader = req.headers.get('authorization');
@@ -113,6 +114,27 @@ export async function GET(req: NextRequest) {
     .select('line_user_id, display_name')
     .in('line_user_id', hostUserIds);
   const hostMap = new Map((hostUsers || []).map((u) => [u.line_user_id, u.display_name]));
+
+  // 檢查是否有舊的預設名稱 '團主' / '球友'，自動補齊真實 LINE 暱稱
+  for (const u of (hostUsers || [])) {
+    if (u.display_name === '團主' || u.display_name === '球友' || !u.display_name) {
+      try {
+        const p = await lineClient.getProfile(u.line_user_id);
+        if (p?.displayName) {
+          hostMap.set(u.line_user_id, p.displayName);
+          supabaseAdmin
+            .from('users')
+            .update({
+              display_name: p.displayName,
+              picture_url: p.pictureUrl || null,
+              updated_at: new Date().toISOString(),
+            })
+            .eq('line_user_id', u.line_user_id)
+            .then();
+        }
+      } catch {}
+    }
+  }
 
   const recordsWithConflict = (records || []).map((rec, i, arr) => {
     let hasConflict = false;

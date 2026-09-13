@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { verifyLineIdToken, isSuperAdmin } from '@/lib/auth';
 import { supabaseAdmin } from '@/lib/supabase';
+import { lineClient } from '@/lib/line';
 
 export const dynamic = 'force-dynamic';
 
@@ -83,15 +84,40 @@ export async function GET(req: NextRequest) {
         display_name: userName || '球友',
         role: envIsAdmin ? 'admin' : 'member',
       };
-    } else if (envIsAdmin && user.role !== 'admin') {
-      // 若在 .env 中被指定為 super admin，自動同步更新資料庫角色為 admin
-      const { data: updatedUser } = await supabaseAdmin
-        .from('users')
-        .update({ role: 'admin' })
-        .eq('line_user_id', lineUserId)
-        .select()
-        .single();
-      if (updatedUser) user = updatedUser;
+    } else {
+      // 每次登入時，若有更新的 LINE 暱稱/頭像或舊名稱仍為預設值，自動同步回寫資料庫
+      const updates: Record<string, any> = {};
+      if (userName && (user.display_name !== userName || user.display_name === '團主' || user.display_name === '球友')) {
+        updates.display_name = userName;
+      }
+      if (userPic && user.picture_url !== userPic) {
+        updates.picture_url = userPic;
+      }
+      if (envIsAdmin && user.role !== 'admin') {
+        updates.role = 'admin';
+      }
+
+      // 若目前無 userName 且資料庫是舊預設值，嘗試主動向 LINE 查詢
+      if (!updates.display_name && (user.display_name === '團主' || user.display_name === '球友' || !user.display_name)) {
+        try {
+          const profile = await lineClient.getProfile(lineUserId);
+          if (profile?.displayName) {
+            updates.display_name = profile.displayName;
+            if (profile.pictureUrl) updates.picture_url = profile.pictureUrl;
+          }
+        } catch {}
+      }
+
+      if (Object.keys(updates).length > 0) {
+        updates.updated_at = new Date().toISOString();
+        const { data: updatedUser } = await supabaseAdmin
+          .from('users')
+          .update(updates)
+          .eq('line_user_id', lineUserId)
+          .select()
+          .single();
+        if (updatedUser) user = updatedUser;
+      }
     }
 
     return NextResponse.json(

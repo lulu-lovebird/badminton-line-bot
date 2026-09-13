@@ -308,6 +308,26 @@ export async function POST(req: NextRequest) {
               .in('line_user_id', hostUserIds);
             const hostMap = new Map((hostUsers || []).map((u) => [u.line_user_id, u.display_name]));
 
+            for (const u of (hostUsers || [])) {
+              if (u.display_name === '團主' || u.display_name === '球友' || !u.display_name) {
+                try {
+                  const p = await lineClient.getProfile(u.line_user_id);
+                  if (p?.displayName) {
+                    hostMap.set(u.line_user_id, p.displayName);
+                    supabaseAdmin
+                      .from('users')
+                      .update({
+                        display_name: p.displayName,
+                        picture_url: p.pictureUrl || null,
+                        updated_at: new Date().toISOString(),
+                      })
+                      .eq('line_user_id', u.line_user_id)
+                      .then();
+                  }
+                } catch {}
+              }
+            }
+
             const sessionsWithHost = sessions.map((s) => ({
               ...s,
               host_name: hostMap.get(s.host_user_id) || '球團主揪',

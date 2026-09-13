@@ -62,6 +62,28 @@ export async function GET(req: NextRequest) {
       .in('line_user_id', hostUserIds);
     const hostMap = new Map((hostUsers || []).map((u) => [u.line_user_id, u]));
 
+    // 檢查是否有舊的預設名稱 '團主' / '球友'，自動補齊真實 LINE 暱稱並回寫
+    for (const u of (hostUsers || [])) {
+      if (u.display_name === '團主' || u.display_name === '球友' || !u.display_name) {
+        try {
+          const p = await lineClient.getProfile(u.line_user_id);
+          if (p?.displayName) {
+            u.display_name = p.displayName;
+            if (p.pictureUrl) u.picture_url = p.pictureUrl;
+            supabaseAdmin
+              .from('users')
+              .update({
+                display_name: p.displayName,
+                picture_url: p.pictureUrl || u.picture_url,
+                updated_at: new Date().toISOString(),
+              })
+              .eq('line_user_id', u.line_user_id)
+              .then();
+          }
+        } catch {}
+      }
+    }
+
     const computed = sessions.map((session) => {
       const sessionRegs = (regs || []).filter((r) => r.session_id === session.id);
       const mainCount = sessionRegs
@@ -123,14 +145,50 @@ export async function POST(req: NextRequest) {
       notes,
       cancel_deadline,
       notify_group_id,
+      host_name,
     } = body;
 
-    // 1. 確保團主使用者存在
-    await supabaseAdmin.from('users').upsert({
-      line_user_id: host_user_id,
-      display_name: '團主',
-      role: 'host',
-    });
+    // 1. 確保團主使用者存在且記錄真實 LINE 暱稱與頭像（絕不覆蓋為「團主」）
+    let hostDisplayName = host_name?.trim();
+    let hostPicUrl: string | null = null;
+
+    const { data: existingUser } = await supabaseAdmin
+      .from('users')
+      .select('display_name, picture_url, role')
+      .eq('line_user_id', host_user_id)
+      .maybeSingle();
+
+    if (!hostDisplayName || hostDisplayName === '團主' || hostDisplayName === '球友') {
+      if (existingUser?.display_name && existingUser.display_name !== '團主' && existingUser.display_name !== '球友') {
+        hostDisplayName = existingUser.display_name;
+        hostPicUrl = existingUser.picture_url;
+      } else {
+        try {
+          const profile = await lineClient.getProfile(host_user_id);
+          if (profile?.displayName) {
+            hostDisplayName = profile.displayName;
+            hostPicUrl = profile.pictureUrl || null;
+          }
+        } catch (err) {
+          console.warn('向 LINE 查詢團主暱稱失敗:', err);
+        }
+      }
+    }
+
+    const finalDisplayName = hostDisplayName || existingUser?.display_name || '球團主揪';
+    const finalPictureUrl = hostPicUrl || existingUser?.picture_url || null;
+    const finalRole = existingUser?.role === 'admin' ? 'admin' : (existingUser?.role || 'host');
+
+    await supabaseAdmin.from('users').upsert(
+      {
+        line_user_id: host_user_id,
+        display_name: finalDisplayName,
+        picture_url: finalPictureUrl,
+        role: finalRole,
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: 'line_user_id' }
+    );
 
     // 2. 如果有 group_id，確保群組記錄存在
     if (group_id) {
@@ -171,17 +229,10 @@ export async function POST(req: NextRequest) {
     // 4. 若有設定推播群組，自動發送 Flex Message
     const targetGroupId = notify_group_id || group_id;
     if (targetGroupId) {
-      // 取得團主姓名
-      const { data: hostUser } = await supabaseAdmin
-        .from('users')
-        .select('display_name, picture_url')
-        .eq('line_user_id', host_user_id)
-        .maybeSingle();
-
       const sessionWithHost = {
         ...session,
-        host_name: hostUser?.display_name || '球團主揪',
-        host_picture_url: hostUser?.picture_url || null,
+        host_name: finalDisplayName,
+        host_picture_url: finalPictureUrl,
       };
 
       const liffUrl = process.env.NEXT_PUBLIC_LIFF_URL || '';
