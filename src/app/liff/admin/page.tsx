@@ -1396,10 +1396,10 @@ function AdminDashboardContent() {
 
       {/* ✏️ 編輯場次 Modal (彈窗) */}
       {editingSession && (
-        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-3 animate-fadeIn">
-          <div className="bg-white rounded-2xl max-w-md w-full max-h-[92vh] overflow-y-auto shadow-2xl border border-slate-200">
+        <div className="fixed inset-0 bg-black/60 z-[70] flex items-center justify-center p-3 sm:p-4 animate-fadeIn">
+          <div className="bg-white rounded-2xl max-w-md w-full max-h-[90vh] flex flex-col shadow-2xl border border-slate-200 overflow-hidden">
             {/* 彈窗標題列 */}
-            <div className="sticky top-0 bg-white px-4 py-3.5 border-b border-slate-100 flex items-center justify-between z-10">
+            <div className="shrink-0 bg-white px-4 py-3.5 border-b border-slate-100 flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <span className="p-1.5 bg-blue-50 text-blue-600 rounded-lg">
                   <Pencil size={16} />
@@ -1419,7 +1419,8 @@ function AdminDashboardContent() {
             </div>
 
             {/* 彈窗表單 */}
-            <form onSubmit={handleUpdateSession} className="p-4 space-y-3.5">
+            <form onSubmit={handleUpdateSession} className="flex-1 flex flex-col min-h-0">
+              <div className="flex-1 overflow-y-auto p-4 space-y-3.5">
               {editNotice && (
                 <div
                   className={`p-3 rounded-xl text-xs flex items-center gap-2 ${
@@ -1631,28 +1632,29 @@ function AdminDashboardContent() {
                   className="w-full text-xs border rounded-lg p-2 mt-1 outline-none focus:border-blue-500"
                 />
               </div>
+            </div>
 
-              {/* 操作按鈕 */}
-              <div className="pt-2 flex items-center justify-end gap-2 border-t border-slate-100">
-                <button
-                  type="button"
-                  onClick={() => setEditingSession(null)}
-                  className="px-4 py-2 text-xs font-semibold text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-xl transition"
-                >
-                  取消
-                </button>
-                <button
-                  type="submit"
-                  disabled={isUpdating}
-                  className="px-5 py-2 text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-50 rounded-xl transition shadow-sm flex items-center gap-1.5"
-                >
-                  {isUpdating && <RefreshCw size={12} className="animate-spin" />}
-                  <span>{isUpdating ? '儲存中...' : '確認儲存修改'}</span>
-                </button>
-              </div>
-            </form>
-          </div>
+            {/* 操作按鈕 (底部常駐，不被內容滾動影響) */}
+            <div className="shrink-0 bg-white/95 backdrop-blur px-4 py-3 border-t border-slate-100 flex items-center justify-end gap-2.5 shadow-sm">
+              <button
+                type="button"
+                onClick={() => setEditingSession(null)}
+                className="px-4 py-2.5 text-xs font-semibold text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-xl transition"
+              >
+                取消
+              </button>
+              <button
+                type="submit"
+                disabled={isUpdating}
+                className="px-5 py-2.5 text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-50 rounded-xl transition shadow-md flex items-center gap-1.5"
+              >
+                {isUpdating && <RefreshCw size={12} className="animate-spin" />}
+                <span>{isUpdating ? '儲存中...' : '確認儲存修改'}</span>
+              </button>
+            </div>
+          </form>
         </div>
+      </div>
       )}
     </main>
   );
