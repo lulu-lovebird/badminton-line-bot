@@ -110,9 +110,19 @@ function AdminDashboardContent() {
   const [registrations, setRegistrations] = useState<Registration[]>([]);
   const [loading, setLoading] = useState(true);
   const [isAuthorized, setIsAuthorized] = useState<boolean | null>(null);
-  const [userProfile, setUserProfile] = useState<{ line_user_id: string; display_name: string; role: string } | null>(null);
+  const [userProfile, setUserProfile] = useState<{ line_user_id: string; display_name: string; role: string; is_super_admin?: boolean } | null>(null);
   const [idToken, setIdToken] = useState<string>('');
   const [authError, setAuthError] = useState<string>('');
+
+  // 權限判斷：是否為超級管理員
+  const isSuperAdminUser = Boolean(userProfile?.is_super_admin || userProfile?.role === 'admin');
+
+  // 權限判斷：是否為該場次之原始主揪團主或超級管理員
+  function canManageSession(session: MatchSession | null): boolean {
+    if (!session || !userProfile?.line_user_id) return false;
+    if (isSuperAdminUser) return true;
+    return session.host_user_id === userProfile.line_user_id;
+  }
 
   // 團主申請狀態
   const [application, setApplication] = useState<{
@@ -232,6 +242,11 @@ function AdminDashboardContent() {
   const [editNotice, setEditNotice] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
   function handleOpenEditSession(s: MatchSession) {
+    if (!canManageSession(s)) {
+      alert('⚠️ 權限不足：只有此場次的原始主揪團主或超級管理員可以修改場次內容。');
+      return;
+    }
+
     const isPast = new Date(s.start_time).getTime() <= Date.now();
     if (isPast) {
       alert('⚠️ 此場次時間已開始或結束，無法再修改內容。');
@@ -1143,6 +1158,11 @@ function AdminDashboardContent() {
                       <span className="text-[11px] px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-800 border border-emerald-200 font-medium">
                         👤 主揪：{s.host_name || '球團團主'}
                       </span>
+                      {userProfile?.line_user_id && s.host_user_id === userProfile.line_user_id && (
+                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-100 text-blue-700 font-bold border border-blue-200">
+                          我開的團
+                        </span>
+                      )}
                     </div>
                     <span
                       className={`text-xs px-2.5 py-0.5 rounded-full font-bold ${
@@ -1195,24 +1215,26 @@ function AdminDashboardContent() {
                         <Share2 size={12} className="text-emerald-600" />
                         <span>推播卡片</span>
                       </button>
-                      {/* ✏️ 編輯場次按鈕 (限尚未開始之場次) */}
-                      {new Date(s.start_time).getTime() > Date.now() ? (
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleOpenEditSession(s);
-                          }}
-                          className="px-2 py-1 bg-blue-50 hover:bg-blue-100 text-blue-800 border border-blue-200 rounded-lg font-bold flex items-center gap-1 active:scale-95 transition-all text-xs"
-                          title="修改場次時間、地點或人數上限"
-                        >
-                          <Pencil size={12} className="text-blue-600" />
-                          <span>修改場次</span>
-                        </button>
-                      ) : (
-                        <span className="px-2 py-0.5 bg-slate-100 text-slate-400 rounded-md text-[11px]">
-                          已結束
-                        </span>
+                      {/* ✏️ 編輯場次按鈕 (限原始主揪團主或 Super Admin，且尚未開始之場次) */}
+                      {canManageSession(s) && (
+                        new Date(s.start_time).getTime() > Date.now() ? (
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleOpenEditSession(s);
+                            }}
+                            className="px-2 py-1 bg-blue-50 hover:bg-blue-100 text-blue-800 border border-blue-200 rounded-lg font-bold flex items-center gap-1 active:scale-95 transition-all text-xs"
+                            title="修改場次時間、地點或人數上限"
+                          >
+                            <Pencil size={12} className="text-blue-600" />
+                            <span>修改場次</span>
+                          </button>
+                        ) : (
+                          <span className="px-2 py-0.5 bg-slate-100 text-slate-400 rounded-md text-[11px]">
+                            已結束
+                          </span>
+                        )
                       )}
                     </div>
                     <span className="text-emerald-600 font-bold">管理名單 →</span>
@@ -1234,16 +1256,23 @@ function AdminDashboardContent() {
               ← 返回場次總覽
             </button>
             <div className="flex items-center gap-1.5 flex-wrap">
-              {new Date(selectedSession.start_time).getTime() > Date.now() && (
-                <button
-                  type="button"
-                  onClick={() => handleOpenEditSession(selectedSession)}
-                  className="px-3 py-1 bg-blue-50 hover:bg-blue-100 text-blue-800 border border-blue-300 rounded-lg font-bold flex items-center gap-1 text-xs active:scale-95 transition-all shadow-sm"
-                  title="修改場次時間、地點或人數上限"
-                >
-                  <Pencil size={13} className="text-blue-600" />
-                  <span>修改場次</span>
-                </button>
+              {/* ✏️ 編輯場次按鈕 (限原始主揪團主或 Super Admin，且尚未開始之場次) */}
+              {canManageSession(selectedSession) && (
+                new Date(selectedSession.start_time).getTime() > Date.now() ? (
+                  <button
+                    type="button"
+                    onClick={() => handleOpenEditSession(selectedSession)}
+                    className="px-3 py-1 bg-blue-50 hover:bg-blue-100 text-blue-800 border border-blue-300 rounded-lg font-bold flex items-center gap-1 text-xs active:scale-95 transition-all shadow-sm"
+                    title="修改場次時間、地點或人數上限"
+                  >
+                    <Pencil size={13} className="text-blue-600" />
+                    <span>修改場次</span>
+                  </button>
+                ) : (
+                  <span className="px-2.5 py-1 bg-slate-100 text-slate-400 rounded-lg text-xs font-semibold">
+                    場次已結束
+                  </span>
+                )
               )}
               <button
                 type="button"
@@ -1405,8 +1434,19 @@ function AdminDashboardContent() {
                   <Pencil size={16} />
                 </span>
                 <div>
-                  <h3 className="text-sm font-bold text-slate-800">修改零打場次內容</h3>
-                  <p className="text-[11px] text-slate-400">僅限未開始之場次可進行編輯</p>
+                  <div className="flex items-center gap-1.5">
+                    <h3 className="text-sm font-bold text-slate-800">修改零打場次內容</h3>
+                    {isSuperAdminUser && editingSession.host_user_id !== userProfile?.line_user_id ? (
+                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-purple-100 text-purple-700 font-bold border border-purple-200">
+                        🛡️ 超級管理員
+                      </span>
+                    ) : (
+                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-100 text-blue-700 font-bold border border-blue-200">
+                        👤 主揪團主
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-[11px] text-slate-400">僅限原始主揪團主或管理員於場次開始前修改</p>
                 </div>
               </div>
               <button

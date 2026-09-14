@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 import { lineClient, createSessionFlexMessage } from '@/lib/line';
-import { verifyLineIdToken } from '@/lib/auth';
+import { verifyLineIdToken, isSuperAdmin } from '@/lib/auth';
 import { isUserInGroup } from '@/lib/line-group-auth';
 import {
   generateSessionCacheKey,
@@ -393,7 +393,7 @@ export async function PATCH(req: NextRequest) {
       .eq('line_user_id', callerUserId)
       .maybeSingle();
 
-    const isSuperAdminUser = user?.role === 'admin';
+    const isSuperAdminUser = isSuperAdmin(callerUserId) || user?.role === 'admin';
 
     const body = await req.json();
     const {
@@ -427,9 +427,18 @@ export async function PATCH(req: NextRequest) {
       return NextResponse.json({ error: '找不到該場次' }, { status: 404 });
     }
 
-    // 2. 權限檢查：只有主揪團主本人或 Super Admin 可修改
-    if (existingSession.host_user_id !== callerUserId && !isSuperAdminUser) {
-      return NextResponse.json({ error: '您不是此場次的主揪團主，無權修改' }, { status: 403 });
+    // 2. 權限檢查：只有原始主揪團主本人或 Super Admin 可修改該場次
+    const isHostOwner = Boolean(
+      existingSession.host_user_id &&
+      callerUserId &&
+      existingSession.host_user_id === callerUserId
+    );
+
+    if (!isHostOwner && !isSuperAdminUser) {
+      return NextResponse.json(
+        { error: '權限不足：只有此場次的原始主揪團主或超級管理員可以修改場次內容' },
+        { status: 403 }
+      );
     }
 
     // 3. 時效檢查：只有時間未到達的場次可以修改
