@@ -380,8 +380,7 @@ function AdminDashboardContent() {
         setUserProfile(user);
         if (user.role === 'host' || user.role === 'admin' || user.is_super_admin) {
           setIsAuthorized(true);
-          const isSuper = Boolean(user.is_super_admin || user.role === 'admin');
-          fetchSessions(token, user.line_user_id, false, isSuper ? undefined : user.line_user_id);
+          fetchSessions(token, user.line_user_id, false, user);
           // 載入可用羽球群組供開團選取
           try {
             const gRes = await fetch('/api/groups');
@@ -423,28 +422,34 @@ function AdminDashboardContent() {
     }
   }
 
-  async function fetchSessions(token?: string, userId?: string, forceRefresh = false, targetHostId?: string) {
+  async function fetchSessions(
+    token?: string,
+    userId?: string,
+    forceRefresh = false,
+    currentUserObj?: { line_user_id: string; role: string; is_super_admin?: boolean } | null
+  ) {
     setLoading(true);
     try {
+      const activeUser = currentUserObj || userProfile;
       const currentToken = token || idToken;
+      const currentUserId = userId || activeUser?.line_user_id;
+
       const headers: Record<string, string> = {};
       if (currentToken) headers['Authorization'] = `Bearer ${currentToken}`;
-      else if (userId) headers['x-test-user-id'] = userId;
+      else if (currentUserId) headers['x-test-user-id'] = currentUserId;
       else headers['x-test-user-id'] = 'host_admin_001';
 
       const params = new URLSearchParams();
       if (urlGroupId) params.append('groupId', urlGroupId);
       if (forceRefresh) params.append('refresh', 'true');
 
-      // 團主僅查自己場次；超級管理員預設查全部（若外部明確指定 targetHostId 則以指定者為主）
-      const isSuper = Boolean(userProfile?.is_super_admin || userProfile?.role === 'admin');
-      const currentUserId = userId || userProfile?.line_user_id;
-      const effectiveHostId = targetHostId !== undefined
-        ? targetHostId
-        : (!isSuper ? currentUserId : undefined);
+      // 判斷是否為超級管理員 (同步優先讀取 activeUser，避免 React setState 非同步閉包尚未生效)
+      const isSuper = Boolean(activeUser?.is_super_admin || activeUser?.role === 'admin');
 
-      if (effectiveHostId) {
-        params.append('hostId', effectiveHostId);
+      // 若非超級管理員（即一般團主），強制於 API 加入 hostId 限制只查自己開的場次
+      // 若為超級管理員，預設載入全站所有場次 (不傳 hostId)
+      if (!isSuper && currentUserId) {
+        params.append('hostId', currentUserId);
       }
 
       const qs = params.toString() ? `?${params.toString()}` : '';
