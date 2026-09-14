@@ -48,11 +48,13 @@ export function generateSessionCacheKey(params: {
   groupId?: string | null;
   date?: string | null;
   status?: string | null;
+  hostId?: string | null;
 }): string {
   const g = encodeURIComponent((params.groupId || '').trim() || 'all');
   const d = encodeURIComponent((params.date || '').trim() || 'all');
   const s = encodeURIComponent((params.status || '').trim() || 'all');
-  return `sessions:g=${g}:d=${d}:s=${s}`;
+  const h = encodeURIComponent((params.hostId || '').trim() || 'all');
+  return `sessions:g=${g}:d=${d}:s=${s}:h=${h}`;
 }
 
 export interface CacheLookupResult<T> {

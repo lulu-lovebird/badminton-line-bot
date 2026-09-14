@@ -21,11 +21,12 @@ export async function GET(req: NextRequest) {
   const groupId = searchParams.get('groupId')?.trim() || null;
   const date = searchParams.get('date')?.trim() || null;
   const status = searchParams.get('status')?.trim() || null;
+  const hostId = searchParams.get('hostId')?.trim() || null;
   const isRefresh =
     searchParams.get('refresh') === 'true' ||
     req.headers.get('cache-control')?.includes('no-cache');
 
-  const cacheKey = generateSessionCacheKey({ groupId, date, status });
+  const cacheKey = generateSessionCacheKey({ groupId, date, status, hostId });
   const ttl = getCacheTTLSeconds();
 
   // 2. 若非強制刷新，優先檢查記憶體快取 (命中時 0 次 Supabase 連線)
@@ -49,6 +50,11 @@ export async function GET(req: NextRequest) {
       .from('match_sessions')
       .select('*')
       .order('start_time', { ascending: true });
+
+    // 若指定團主 ID (例如團主後台僅看自己建立之場次)
+    if (hostId) {
+      query = query.eq('host_user_id', hostId);
+    }
 
     // 若有提供群組，顯示該群專屬場次 + 全域公開場次 (group_id 為 null)
     if (groupId) {

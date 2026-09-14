@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, Suspense } from 'react';
+import React, { useState, useEffect, useMemo, Suspense } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { PlusCircle, Users, CheckCircle, Clock, Calendar, MapPin, Send, AlertCircle, RefreshCw, ShieldAlert, Key, Copy, Shield, UserPlus, FileText, User, Share2, Pencil, X } from 'lucide-react';
@@ -113,6 +113,7 @@ function AdminDashboardContent() {
   const [userProfile, setUserProfile] = useState<{ line_user_id: string; display_name: string; role: string; is_super_admin?: boolean } | null>(null);
   const [idToken, setIdToken] = useState<string>('');
   const [authError, setAuthError] = useState<string>('');
+  const [adminFilter, setAdminFilter] = useState<'all' | 'mine'>('all');
 
   // 權限判斷：是否為超級管理員
   const isSuperAdminUser = Boolean(userProfile?.is_super_admin || userProfile?.role === 'admin');
@@ -123,6 +124,19 @@ function AdminDashboardContent() {
     if (isSuperAdminUser) return true;
     return session.host_user_id === userProfile.line_user_id;
   }
+
+  // 篩選後呈現之場次：一般團主僅能見自己建立之場次；超級管理員可全覽或切換
+  const displayedSessions = useMemo(() => {
+    if (isSuperAdminUser) {
+      if (adminFilter === 'mine' && userProfile?.line_user_id) {
+        return sessions.filter((s) => s.host_user_id === userProfile.line_user_id);
+      }
+      return sessions;
+    }
+    // 一般團主：嚴格只保留自己建立的場次 (前端雙重防護)
+    if (!userProfile?.line_user_id) return [];
+    return sessions.filter((s) => s.host_user_id === userProfile.line_user_id);
+  }, [sessions, isSuperAdminUser, adminFilter, userProfile?.line_user_id]);
 
   // 團主申請狀態
   const [application, setApplication] = useState<{
@@ -366,7 +380,8 @@ function AdminDashboardContent() {
         setUserProfile(user);
         if (user.role === 'host' || user.role === 'admin' || user.is_super_admin) {
           setIsAuthorized(true);
-          fetchSessions(token, user.line_user_id);
+          const isSuper = Boolean(user.is_super_admin || user.role === 'admin');
+          fetchSessions(token, user.line_user_id, false, isSuper ? undefined : user.line_user_id);
           // 載入可用羽球群組供開團選取
           try {
             const gRes = await fetch('/api/groups');
@@ -408,7 +423,7 @@ function AdminDashboardContent() {
     }
   }
 
-  async function fetchSessions(token?: string, userId?: string, forceRefresh = false) {
+  async function fetchSessions(token?: string, userId?: string, forceRefresh = false, targetHostId?: string) {
     setLoading(true);
     try {
       const currentToken = token || idToken;
@@ -420,6 +435,18 @@ function AdminDashboardContent() {
       const params = new URLSearchParams();
       if (urlGroupId) params.append('groupId', urlGroupId);
       if (forceRefresh) params.append('refresh', 'true');
+
+      // 團主僅查自己場次；超級管理員預設查全部（若外部明確指定 targetHostId 則以指定者為主）
+      const isSuper = Boolean(userProfile?.is_super_admin || userProfile?.role === 'admin');
+      const currentUserId = userId || userProfile?.line_user_id;
+      const effectiveHostId = targetHostId !== undefined
+        ? targetHostId
+        : (!isSuper ? currentUserId : undefined);
+
+      if (effectiveHostId) {
+        params.append('hostId', effectiveHostId);
+      }
+
       const qs = params.toString() ? `?${params.toString()}` : '';
 
       const res = await fetch(`/api/sessions${qs}`, { headers });
@@ -433,6 +460,10 @@ function AdminDashboardContent() {
   }
 
   async function openSessionDetail(session: MatchSession) {
+    if (!canManageSession(session)) {
+      alert('⚠️ 權限不足：您只能查看與管理自己建立主持的零打場次。');
+      return;
+    }
     setSelectedSession(session);
     try {
       const headers: Record<string, string> = {};
@@ -1126,25 +1157,76 @@ function AdminDashboardContent() {
 
       {activeTab === 'sessions' && !selectedSession && (
         <div className="space-y-3">
-          <div className="flex items-center justify-between">
-            <h2 className="text-xs font-bold text-slate-500 uppercase tracking-wider">
-              {urlGroupId ? '本群場次總覽' : '進行中與開放場次'}
-            </h2>
-            <button
-              onClick={() => fetchSessions(idToken, userProfile?.line_user_id, true)}
-              className="text-slate-400 hover:text-slate-600 active:scale-95 transition-all p-1 rounded"
-              title="強制重新整理 (繞過快取)"
-            >
-              <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
-            </button>
+          <div className="flex items-center justify-between gap-2 flex-wrap">
+            <div>
+              <div className="flex items-center gap-1.5">
+                <h2 className="text-xs font-bold text-slate-700 uppercase tracking-wider">
+                  {urlGroupId
+                    ? '本群場次總覽'
+                    : isSuperAdminUser
+                    ? '全站零打場次總覽'
+                    : '我建立的零打場次'}
+                </h2>
+                {isSuperAdminUser && (
+                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-purple-100 text-purple-700 font-bold border border-purple-200">
+                    🛡️ 管理員全覽
+                  </span>
+                )}
+              </div>
+              <p className="text-[11px] text-slate-400">
+                {isSuperAdminUser
+                  ? '超級管理員可檢視並管理全站所有團主建立之場次'
+                  : '僅顯示您所建立主持之零打場次'}
+              </p>
+            </div>
+
+            <div className="flex items-center gap-2">
+              {isSuperAdminUser && (
+                <div className="flex bg-slate-200/80 p-0.5 rounded-lg text-[11px] font-bold">
+                  <button
+                    type="button"
+                    onClick={() => setAdminFilter('all')}
+                    className={`px-2 py-0.5 rounded-md transition ${adminFilter === 'all' ? 'bg-white text-slate-800 shadow-xs' : 'text-slate-500 hover:text-slate-800'}`}
+                  >
+                    全部 ({sessions.length})
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setAdminFilter('mine')}
+                    className={`px-2 py-0.5 rounded-md transition ${adminFilter === 'mine' ? 'bg-white text-blue-600 shadow-xs' : 'text-slate-500 hover:text-slate-800'}`}
+                  >
+                    我開的 ({sessions.filter((s) => s.host_user_id === userProfile?.line_user_id).length})
+                  </button>
+                </div>
+              )}
+              <button
+                onClick={() => fetchSessions(idToken, userProfile?.line_user_id, true)}
+                className="text-slate-400 hover:text-slate-600 active:scale-95 transition-all p-1 rounded"
+                title="強制重新整理 (繞過快取)"
+              >
+                <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
+              </button>
+            </div>
           </div>
 
-          {sessions.length === 0 ? (
-            <div className="text-center py-10 bg-white rounded-2xl border text-xs text-slate-500">
-              尚無場次，請點擊上方「建立新零打場次」
+          {displayedSessions.length === 0 ? (
+            <div className="text-center py-10 bg-white rounded-2xl border text-xs text-slate-500 space-y-2.5">
+              <div className="text-slate-400">
+                {isSuperAdminUser
+                  ? '目前無符合條件之零打場次'
+                  : '您目前尚未建立任何零打場次'}
+              </div>
+              <button
+                type="button"
+                onClick={() => setActiveTab('create')}
+                className="px-4 py-2 bg-emerald-600 text-white font-bold text-xs rounded-xl hover:bg-emerald-700 transition shadow-sm inline-flex items-center gap-1"
+              >
+                <PlusCircle size={14} />
+                <span>立即建立新零打場次</span>
+              </button>
             </div>
           ) : (
-            sessions.map((s) => {
+            displayedSessions.map((s) => {
               const isFull = (s.current_players || 0) >= s.max_players;
               return (
                 <div
