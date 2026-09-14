@@ -174,6 +174,7 @@ function AdminDashboardContent() {
     shuttlecock: '勝利比賽球 (綠標)',
     fee: 200,
     notes: '含空調，請自備球拍與乾淨球鞋',
+    is_roster_public: true,
   });
 
   const [copyNotice, setCopyNotice] = useState<string | null>(null);
@@ -197,6 +198,7 @@ function AdminDashboardContent() {
       shuttlecock: s.shuttlecock || '勝利比賽球 (綠標)',
       fee: s.fee || 200,
       notes: s.notes || '含空調，請自備球拍與乾淨球鞋',
+      is_roster_public: s.is_roster_public ?? true,
     });
 
     setCopyNotice(`已成功為您帶入「${s.title}」並自動順延 7 天至下週！報名名單已全新清空。`);
@@ -235,6 +237,7 @@ function AdminDashboardContent() {
     shuttlecock: string;
     fee: number;
     notes: string;
+    is_roster_public: boolean;
     current_players: number;
   }>({
     id: '',
@@ -250,6 +253,7 @@ function AdminDashboardContent() {
     shuttlecock: '勝利比賽球 (綠標)',
     fee: 200,
     notes: '',
+    is_roster_public: true,
     current_players: 0,
   });
   const [isUpdating, setIsUpdating] = useState(false);
@@ -281,6 +285,7 @@ function AdminDashboardContent() {
       shuttlecock: s.shuttlecock || '勝利比賽球 (綠標)',
       fee: s.fee ?? 200,
       notes: s.notes || '',
+      is_roster_public: s.is_roster_public ?? true,
       current_players: s.current_players || 0,
     });
     setEditNotice(null);
@@ -1151,6 +1156,66 @@ function AdminDashboardContent() {
             />
           </div>
 
+          {/* 名單公開度設定 */}
+          <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 space-y-2">
+            <label className="text-xs font-bold text-slate-700 flex items-center justify-between">
+              <span>報名名單公開度</span>
+              <span className="text-[10px] text-slate-400 font-normal">
+                {form.is_roster_public ? '🌐 球友可見報名暱稱' : '🔒 僅主揪可見報名名冊'}
+              </span>
+            </label>
+            <div className="grid grid-cols-2 gap-2">
+              <label
+                className={`flex items-start gap-2 p-2.5 rounded-xl border cursor-pointer transition-all ${
+                  form.is_roster_public
+                    ? 'bg-blue-50/80 border-blue-400 text-blue-900 shadow-xs'
+                    : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'
+                }`}
+              >
+                <input
+                  type="radio"
+                  name="roster_visibility_create"
+                  checked={form.is_roster_public}
+                  onChange={() => setForm({ ...form, is_roster_public: true })}
+                  className="mt-0.5 text-blue-600"
+                />
+                <div>
+                  <div className="text-xs font-bold flex items-center gap-1">
+                    <span>🌐 公開名單</span>
+                    <span className="text-[10px] px-1 py-0.2 bg-blue-100 text-blue-700 rounded font-semibold">預設</span>
+                  </div>
+                  <div className="text-[11px] text-slate-500 mt-0.5 leading-tight">
+                    球友報名時可查看名單暱稱與同行人數
+                  </div>
+                </div>
+              </label>
+
+              <label
+                className={`flex items-start gap-2 p-2.5 rounded-xl border cursor-pointer transition-all ${
+                  !form.is_roster_public
+                    ? 'bg-amber-50/80 border-amber-400 text-amber-900 shadow-xs'
+                    : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'
+                }`}
+              >
+                <input
+                  type="radio"
+                  name="roster_visibility_create"
+                  checked={!form.is_roster_public}
+                  onChange={() => setForm({ ...form, is_roster_public: false })}
+                  className="mt-0.5 text-amber-600"
+                />
+                <div>
+                  <div className="text-xs font-bold flex items-center gap-1">
+                    <span>🔒 私密名單</span>
+                  </div>
+                  <div className="text-[11px] text-slate-500 mt-0.5 leading-tight">
+                    隱藏名單，球友僅能看到報名總人數
+                  </div>
+                </div>
+              </label>
+            </div>
+          </div>
+
           <button
             type="submit"
             className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl shadow-md transition-all mt-2"
@@ -1248,6 +1313,15 @@ function AdminDashboardContent() {
                       {userProfile?.line_user_id && s.host_user_id === userProfile.line_user_id && (
                         <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-100 text-blue-700 font-bold border border-blue-200">
                           我開的團
+                        </span>
+                      )}
+                      {s.is_roster_public === false ? (
+                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-50 text-amber-800 font-bold border border-amber-200">
+                          🔒 私密名單
+                        </span>
+                      ) : (
+                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-slate-100 text-slate-600 font-medium">
+                          🌐 公開名單
                         </span>
                       )}
                     </div>
@@ -1375,7 +1449,18 @@ function AdminDashboardContent() {
 
           <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm">
             <div className="flex items-center justify-between gap-2 mb-1">
-              <h2 className="font-bold text-slate-800 text-base">{selectedSession.title}</h2>
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <h2 className="font-bold text-slate-800 text-base">{selectedSession.title}</h2>
+                {selectedSession.is_roster_public === false ? (
+                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-50 text-amber-800 border border-amber-200 font-bold">
+                    🔒 私密名單
+                  </span>
+                ) : (
+                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-200 font-semibold">
+                    🌐 公開名單
+                  </span>
+                )}
+              </div>
               <span className="text-xs px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-800 border border-emerald-200 font-semibold shrink-0">
                 👤 主揪：{selectedSession.host_name || '球團團主'}
               </span>
@@ -1758,6 +1843,65 @@ function AdminDashboardContent() {
                   onChange={(e) => setEditForm({ ...editForm, notes: e.target.value })}
                   className="w-full text-xs border rounded-lg p-2 mt-1 outline-none focus:border-blue-500"
                 />
+              </div>
+
+              {/* 名單公開度設定 */}
+              <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 space-y-2">
+                <label className="text-xs font-bold text-slate-700 flex items-center justify-between">
+                  <span>報名名單公開度</span>
+                  <span className="text-[10px] text-slate-400 font-normal">
+                    {editForm.is_roster_public ? '🌐 球友可見報名暱稱' : '🔒 僅主揪可見報名名冊'}
+                  </span>
+                </label>
+                <div className="grid grid-cols-2 gap-2">
+                  <label
+                    className={`flex items-start gap-2 p-2.5 rounded-xl border cursor-pointer transition-all ${
+                      editForm.is_roster_public
+                        ? 'bg-blue-50/80 border-blue-400 text-blue-900 shadow-xs'
+                        : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'
+                    }`}
+                  >
+                    <input
+                      type="radio"
+                      name="roster_visibility_edit"
+                      checked={editForm.is_roster_public}
+                      onChange={() => setEditForm({ ...editForm, is_roster_public: true })}
+                      className="mt-0.5 text-blue-600"
+                    />
+                    <div>
+                      <div className="text-xs font-bold flex items-center gap-1">
+                        <span>🌐 公開名單</span>
+                      </div>
+                      <div className="text-[11px] text-slate-500 mt-0.5 leading-tight">
+                        球友報名時可查看名單暱稱
+                      </div>
+                    </div>
+                  </label>
+
+                  <label
+                    className={`flex items-start gap-2 p-2.5 rounded-xl border cursor-pointer transition-all ${
+                      !editForm.is_roster_public
+                        ? 'bg-amber-50/80 border-amber-400 text-amber-900 shadow-xs'
+                        : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'
+                    }`}
+                  >
+                    <input
+                      type="radio"
+                      name="roster_visibility_edit"
+                      checked={!editForm.is_roster_public}
+                      onChange={() => setEditForm({ ...editForm, is_roster_public: false })}
+                      className="mt-0.5 text-amber-600"
+                    />
+                    <div>
+                      <div className="text-xs font-bold flex items-center gap-1">
+                        <span>🔒 私密名單</span>
+                      </div>
+                      <div className="text-[11px] text-slate-500 mt-0.5 leading-tight">
+                        隱藏名單，球友僅見總人數
+                      </div>
+                    </div>
+                  </label>
+                </div>
               </div>
             </div>
 

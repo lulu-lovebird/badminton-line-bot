@@ -41,6 +41,7 @@ CREATE TABLE IF NOT EXISTS match_sessions (
     fee INT NOT NULL DEFAULT 200,                -- 費用 (每人)
     notes TEXT,                                  -- 備註 (冷氣、飲水、收費方式等)
     cancel_deadline TIMESTAMPTZ,                 -- 免費取消截止時間
+    is_roster_public BOOLEAN NOT NULL DEFAULT TRUE, -- 是否公開已報名球友名單 (true: 公開, false: 私密僅主揪可見)
     status TEXT NOT NULL DEFAULT 'open',         -- 'open' (開放中) | 'full' (已滿) | 'closed' (已關閉) | 'cancelled' (已取消)
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW()

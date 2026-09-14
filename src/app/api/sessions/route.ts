@@ -189,6 +189,7 @@ export async function GET(req: NextRequest) {
 
       return {
         ...session,
+        is_roster_public: session.is_roster_public ?? true,
         host_name: host?.display_name || '球團主揪',
         host_picture_url: host?.picture_url || null,
         current_players: mainCount,
@@ -258,6 +259,7 @@ export async function POST(req: NextRequest) {
       cancel_deadline,
       notify_group_id,
       host_name,
+      is_roster_public,
     } = body;
 
     // 1. 確保團主使用者存在且記錄真實 LINE 暱稱與頭像（絕不覆蓋為「團主」）
@@ -311,28 +313,43 @@ export async function POST(req: NextRequest) {
     }
 
     // 3. 建立場次 (確保日期時間以台灣時區標準化存入 TIMESTAMPTZ)
-    const { data: session, error } = await supabaseAdmin
+    const insertPayload: Record<string, unknown> = {
+      host_user_id,
+      group_id: group_id || null,
+      title,
+      match_type: match_type || 'double',
+      start_time: toTaipeiISOString(start_time),
+      end_time: toTaipeiISOString(end_time),
+      location,
+      court_info,
+      max_players: Number(max_players) || 8,
+      max_waitlist: Number(max_waitlist) || 5,
+      level_requirement,
+      shuttlecock,
+      fee: Number(fee) || 200,
+      notes,
+      cancel_deadline: cancel_deadline ? toTaipeiISOString(cancel_deadline) : null,
+      is_roster_public: is_roster_public !== undefined ? Boolean(is_roster_public) : true,
+      status: 'open',
+    };
+
+    let { data: session, error } = await supabaseAdmin
       .from('match_sessions')
-      .insert({
-        host_user_id,
-        group_id: group_id || null,
-        title,
-        match_type: match_type || 'double',
-        start_time: toTaipeiISOString(start_time),
-        end_time: toTaipeiISOString(end_time),
-        location,
-        court_info,
-        max_players: Number(max_players) || 8,
-        max_waitlist: Number(max_waitlist) || 5,
-        level_requirement,
-        shuttlecock,
-        fee: Number(fee) || 200,
-        notes,
-        cancel_deadline: cancel_deadline ? toTaipeiISOString(cancel_deadline) : null,
-        status: 'open',
-      })
+      .insert(insertPayload)
       .select()
       .single();
+
+    // 🛡️ 容錯回退：若資料庫尚未執行 is_roster_public 遷移腳本，剔除該欄位重試
+    if (error && error.code === 'PGRST204') {
+      delete insertPayload.is_roster_public;
+      const retry = await supabaseAdmin
+        .from('match_sessions')
+        .insert(insertPayload)
+        .select()
+        .single();
+      session = retry.data;
+      error = retry.error;
+    }
 
     if (error || !session) {
       return NextResponse.json({ error: error?.message || '建立失敗' }, { status: 500 });
@@ -416,6 +433,7 @@ export async function PATCH(req: NextRequest) {
       shuttlecock,
       fee,
       notes,
+      is_roster_public,
     } = body;
 
     if (!id) {
@@ -488,6 +506,7 @@ export async function PATCH(req: NextRequest) {
     if (shuttlecock !== undefined) updatePayload.shuttlecock = shuttlecock.trim();
     if (fee !== undefined) updatePayload.fee = Number(fee) || 0;
     if (notes !== undefined) updatePayload.notes = notes.trim();
+    if (is_roster_public !== undefined) updatePayload.is_roster_public = Boolean(is_roster_public);
 
     // 更新狀態
     if (newMaxPlayers > currentMainCount) {
@@ -496,12 +515,25 @@ export async function PATCH(req: NextRequest) {
       updatePayload.status = 'full';
     }
 
-    const { data: updatedSession, error: updateErr } = await supabaseAdmin
+    let { data: updatedSession, error: updateErr } = await supabaseAdmin
       .from('match_sessions')
       .update(updatePayload)
       .eq('id', id)
       .select()
       .single();
+
+    // 🛡️ 容錯回退：若資料庫尚未執行 is_roster_public 遷移腳本，剔除該欄位重試
+    if (updateErr && updateErr.code === 'PGRST204') {
+      delete updatePayload.is_roster_public;
+      const retry = await supabaseAdmin
+        .from('match_sessions')
+        .update(updatePayload)
+        .eq('id', id)
+        .select()
+        .single();
+      updatedSession = retry.data;
+      updateErr = retry.error;
+    }
 
     if (updateErr) {
       return NextResponse.json({ error: updateErr.message }, { status: 500 });

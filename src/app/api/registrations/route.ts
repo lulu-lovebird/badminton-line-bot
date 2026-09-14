@@ -1,12 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 import { cancelRegistrationAndPromote } from '@/lib/registration-service';
-import { verifyLineIdToken } from '@/lib/auth';
+import { verifyLineIdToken, isSuperAdmin } from '@/lib/auth';
 import { isUserInGroup } from '@/lib/line-group-auth';
 import { lineClient } from '@/lib/line';
 import { invalidateSessionCache } from '@/lib/session-cache';
 
-async function getCallerIdentity(req: NextRequest): Promise<{ userId: string; role: string } | null> {
+async function getCallerIdentity(req: NextRequest): Promise<{ userId: string; role: string; isSuperAdmin: boolean } | null> {
   const authHeader = req.headers.get('authorization');
   let lineUserId: string | null = null;
 
@@ -29,11 +29,12 @@ async function getCallerIdentity(req: NextRequest): Promise<{ userId: string; ro
     .from('users')
     .select('role')
     .eq('line_user_id', lineUserId)
-    .single();
+    .maybeSingle();
 
   return {
     userId: lineUserId,
     role: user?.role || 'member',
+    isSuperAdmin: isSuperAdmin(lineUserId) || user?.role === 'admin',
   };
 }
 
@@ -45,16 +46,27 @@ export async function GET(req: NextRequest) {
 
   // 1. 查詢特定場次名單
   if (sessionId) {
-    const isHostOrAdmin = caller?.role === 'host' || caller?.role === 'admin';
-
-    // 檢查該場次是否有綁定群組，若有且非管理員，檢查是否為該群成員
+    // 查詢該場次資訊 (含 host_user_id, group_id, is_roster_public)
     const { data: session } = await supabaseAdmin
       .from('match_sessions')
-      .select('group_id')
+      .select('id, host_user_id, group_id, is_roster_public')
       .eq('id', sessionId)
       .single();
 
-    if (session?.group_id && caller && !isHostOrAdmin) {
+    if (!session) {
+      return NextResponse.json({ error: '找不到該場次' }, { status: 404 });
+    }
+
+    const isHostOwner = Boolean(
+      session.host_user_id &&
+      caller?.userId &&
+      session.host_user_id === caller.userId
+    );
+    const isSuper = Boolean(caller?.isSuperAdmin);
+    const canSeeFullRoster = isHostOwner || isSuper;
+
+    // 檢查該場次是否有綁定群組，若有且非管理員/本場主揪，檢查是否為該群成員
+    if (session.group_id && caller && !canSeeFullRoster) {
       const isMember = await isUserInGroup(session.group_id, caller.userId);
       if (!isMember) {
         return NextResponse.json({ error: '非該群組成員，無法查看名單' }, { status: 403 });
@@ -70,9 +82,40 @@ export async function GET(req: NextRequest) {
 
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
+    const isRosterPublic = session.is_roster_public ?? true;
+
+    // 🔒 私密名單 (is_roster_public === false)：
+    // 只有本場主揪或 Super Admin 可看完整名單！
+    // 若為一般球友或其他團主，嚴格於後端防護：僅回傳該使用者自身的報名項目，完全不洩漏其他球友名單
+    if (!isRosterPublic && !canSeeFullRoster) {
+      const myRegs = caller?.userId
+        ? (regs || []).filter((r) => r.user_id === caller.userId).map((r) => ({
+            id: r.id,
+            session_id: r.session_id,
+            player_name: r.player_name,
+            party_size: r.party_size,
+            status: r.status,
+            waitlist_order: r.waitlist_order,
+            is_mine: true,
+          }))
+        : [];
+
+      return NextResponse.json(myRegs, {
+        headers: {
+          'Cache-Control': 'private, no-cache, no-store, must-revalidate',
+          'X-Roster-Visibility': 'private',
+        },
+      });
+    }
+
+    // 🌐 公開名單 (或主揪 / Admin 檢視)：
     const sanitized = (regs || []).map((r) => {
-      if (isHostOrAdmin || (caller && r.user_id === caller.userId)) {
-        return r;
+      const isMine = caller ? r.user_id === caller.userId : false;
+      if (canSeeFullRoster || isMine) {
+        return {
+          ...r,
+          is_mine: isMine,
+        };
       }
       return {
         id: r.id,
@@ -81,13 +124,16 @@ export async function GET(req: NextRequest) {
         party_size: r.party_size,
         status: r.status,
         waitlist_order: r.waitlist_order,
-        user_id: undefined,
-        payment_status: undefined,
-        notes: undefined,
+        is_mine: false,
       };
     });
 
-    return NextResponse.json(sanitized);
+    return NextResponse.json(sanitized, {
+      headers: {
+        'Cache-Control': 'private, no-cache, no-store, must-revalidate',
+        'X-Roster-Visibility': isRosterPublic ? 'public' : 'private',
+      },
+    });
   }
 
   // 2. 查詢個人報名紀錄

@@ -2,9 +2,18 @@
 
 import React, { useState, useEffect, useRef, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { Calendar, MapPin, DollarSign, Award, CheckCircle, AlertCircle, Clock, RefreshCw, Globe, User } from 'lucide-react';
+import { Calendar, MapPin, DollarSign, Award, CheckCircle, AlertCircle, Clock, RefreshCw, Globe, User, Users } from 'lucide-react';
 import { MatchSession } from '@/types/database';
 import { useLiff } from '@/components/liff-provider';
+
+interface RosterItem {
+  id: string;
+  player_name: string;
+  party_size: number;
+  status: 'main' | 'waitlist' | 'cancelled';
+  waitlist_order?: number | null;
+  is_mine?: boolean;
+}
 
 function SessionListContent() {
   const searchParams = useSearchParams();
@@ -16,6 +25,8 @@ function SessionListContent() {
   const [partySize, setPartySize] = useState<number>(1);
   const [submittingId, setSubmittingId] = useState<string | null>(null);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [expandedRosters, setExpandedRosters] = useState<Record<string, boolean>>({});
+  const [rosterData, setRosterData] = useState<Record<string, { loading: boolean; list: RosterItem[]; error?: string }>>({});
 
   const { userProfile, idToken } = useLiff();
 
@@ -59,6 +70,49 @@ function SessionListContent() {
     fetchSessions();
   }, []);
 
+  const fetchRoster = async (sessionId: string) => {
+    setRosterData((prev) => ({
+      ...prev,
+      [sessionId]: { loading: true, list: prev[sessionId]?.list || [] },
+    }));
+
+    try {
+      const headers: Record<string, string> = {};
+      if (idToken) headers['Authorization'] = `Bearer ${idToken}`;
+      else if (userProfile?.userId) headers['x-test-user-id'] = userProfile.userId;
+
+      const res = await fetch(`/api/registrations?sessionId=${sessionId}`, {
+        headers,
+        cache: 'no-store',
+      });
+      if (!res.ok) {
+        throw new Error('無法載入名單');
+      }
+      const data = await res.json();
+      setRosterData((prev) => ({
+        ...prev,
+        [sessionId]: { loading: false, list: Array.isArray(data) ? data : [] },
+      }));
+    } catch (err: unknown) {
+      setRosterData((prev) => ({
+        ...prev,
+        [sessionId]: {
+          loading: false,
+          list: [],
+          error: err instanceof Error ? err.message : '載入失敗',
+        },
+      }));
+    }
+  };
+
+  const toggleRoster = (sessionId: string) => {
+    const willExpand = !expandedRosters[sessionId];
+    setExpandedRosters((prev) => ({ ...prev, [sessionId]: willExpand }));
+    if (willExpand && !rosterData[sessionId]?.list?.length) {
+      fetchRoster(sessionId);
+    }
+  };
+
   const handleRegister = async (session: MatchSession) => {
     if (!userProfile) {
       alert('請先在 LINE 中開啟或登入！');
@@ -101,6 +155,9 @@ function SessionListContent() {
       }
 
       fetchSessions(selectedDate, currentGroupId, true);
+      if (expandedRosters[session.id]) {
+        fetchRoster(session.id);
+      }
     } catch (err: unknown) {
       const errorMsg = err instanceof Error ? err.message : '報名時發生錯誤';
       setMessage({ type: 'error', text: errorMsg });
@@ -234,6 +291,15 @@ function SessionListContent() {
                     <span className="text-xs px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-800 border border-emerald-200 font-medium">
                       👤 團主：{s.host_name || '球團團主'}
                     </span>
+                    <span
+                      className={`text-xs px-2 py-0.5 rounded-full font-medium border ${
+                        s.is_roster_public === false
+                          ? 'bg-amber-50 text-amber-800 border-amber-200'
+                          : 'bg-blue-50 text-blue-700 border-blue-200'
+                      }`}
+                    >
+                      {s.is_roster_public === false ? '🔒 私密名單' : '🌐 公開名單'}
+                    </span>
                   </div>
                   <span
                     className={`text-xs px-2.5 py-0.5 rounded-full font-bold ${
@@ -291,6 +357,172 @@ function SessionListContent() {
                     ℹ️ {s.notes}
                   </div>
                 )}
+
+                {/* 報名名單顯示區塊 */}
+                <div className="mt-3 pt-2.5 border-t border-dashed border-slate-200">
+                  {s.is_roster_public === false ? (
+                    <div>
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs text-slate-500 flex items-center gap-1">
+                          🔒 私密名單（名冊不公開，僅統計人數）
+                        </span>
+                        {userProfile && (
+                          <button
+                            type="button"
+                            onClick={() => toggleRoster(s.id)}
+                            className="text-xs text-emerald-600 hover:text-emerald-700 font-medium flex items-center gap-1 py-0.5 px-2 rounded hover:bg-emerald-50 transition-colors"
+                          >
+                            <span>{expandedRosters[s.id] ? '收合狀態' : '查詢我的狀態'}</span>
+                          </button>
+                        )}
+                      </div>
+                      {expandedRosters[s.id] && (
+                        <div className="mt-2 p-2.5 bg-slate-50 rounded-xl border border-slate-200 text-xs">
+                          {rosterData[s.id]?.loading ? (
+                            <div className="text-slate-400 py-1 flex items-center gap-1.5">
+                              <RefreshCw size={12} className="animate-spin text-emerald-600" />
+                              <span>查詢中...</span>
+                            </div>
+                          ) : rosterData[s.id]?.error ? (
+                            <div className="text-red-500 py-1">{rosterData[s.id]?.error}</div>
+                          ) : (rosterData[s.id]?.list || []).length > 0 ? (
+                            <div className="space-y-1.5">
+                              {(rosterData[s.id]?.list || []).map((r, idx) => (
+                                <div
+                                  key={r.id || idx}
+                                  className="flex items-center justify-between text-slate-700 bg-white p-2 rounded-lg border border-slate-200 shadow-sm"
+                                >
+                                  <span className="font-bold text-emerald-700">
+                                    ✓ {r.player_name || userProfile?.displayName}{' '}
+                                    {r.party_size > 1 ? `(+${r.party_size - 1})` : ''}
+                                  </span>
+                                  <span
+                                    className={`text-[11px] px-2 py-0.5 rounded-full font-bold ${
+                                      r.status === 'main'
+                                        ? 'bg-emerald-100 text-emerald-800'
+                                        : 'bg-amber-100 text-amber-800'
+                                    }`}
+                                  >
+                                    {r.status === 'main'
+                                      ? '正取名額'
+                                      : `備取第 ${r.waitlist_order || 1} 位`}
+                                  </span>
+                                </div>
+                              ))}
+                            </div>
+                          ) : (
+                            <div className="text-slate-400 py-1">您尚未報名此場次</div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <div>
+                      <div className="flex items-center justify-between">
+                        <button
+                          type="button"
+                          onClick={() => toggleRoster(s.id)}
+                          className="text-xs text-slate-600 hover:text-emerald-700 font-medium flex items-center gap-1.5 py-1 px-1.5 rounded-lg hover:bg-slate-100 transition-colors"
+                        >
+                          <Users size={14} className="text-emerald-600" />
+                          <span>
+                            {expandedRosters[s.id]
+                              ? '收合球友名單'
+                              : `查看已報名名單 (${s.current_players || 0}人)`}
+                          </span>
+                        </button>
+                      </div>
+                      {expandedRosters[s.id] && (
+                        <div className="mt-2 p-3 bg-slate-50 rounded-xl border border-slate-200 text-xs">
+                          {rosterData[s.id]?.loading ? (
+                            <div className="text-slate-400 py-2 flex items-center justify-center gap-1.5">
+                              <RefreshCw size={13} className="animate-spin text-emerald-600" />
+                              <span>載入球友名單中...</span>
+                            </div>
+                          ) : rosterData[s.id]?.error ? (
+                            <div className="text-red-500 py-1">{rosterData[s.id]?.error}</div>
+                          ) : (rosterData[s.id]?.list || []).length === 0 ? (
+                            <div className="text-slate-400 text-center py-2">目前尚無球友報名，搶先報名吧！</div>
+                          ) : (
+                            <div className="space-y-2.5">
+                              {/* 正取名單 */}
+                              {(() => {
+                                const mainList = (rosterData[s.id]?.list || []).filter((r) => r.status === 'main');
+                                const waitList = (rosterData[s.id]?.list || []).filter((r) => r.status === 'waitlist');
+                                return (
+                                  <>
+                                    <div>
+                                      <div className="text-[11px] font-bold text-slate-600 mb-1.5 flex items-center justify-between">
+                                        <span>🟢 正取球友 ({mainList.reduce((acc, r) => acc + (r.party_size || 1), 0)}/{s.max_players}人)</span>
+                                      </div>
+                                      {mainList.length === 0 ? (
+                                        <div className="text-slate-400 text-xs py-1">尚無正取</div>
+                                      ) : (
+                                        <div className="grid grid-cols-2 gap-1.5">
+                                          {mainList.map((r, idx) => (
+                                            <div
+                                              key={r.id || idx}
+                                              className={`px-2 py-1 rounded-lg border text-xs flex items-center justify-between ${
+                                                r.is_mine
+                                                  ? 'bg-emerald-50 border-emerald-300 text-emerald-900 font-bold'
+                                                  : 'bg-white border-slate-200 text-slate-700'
+                                              }`}
+                                            >
+                                              <span className="truncate">
+                                                {idx + 1}. {r.player_name}
+                                                {r.is_mine && <span className="ml-1 text-[10px] text-emerald-600">(您)</span>}
+                                              </span>
+                                              {r.party_size > 1 && (
+                                                <span className="text-[10px] bg-slate-100 text-slate-600 px-1 rounded ml-1 shrink-0">
+                                                  +{r.party_size - 1}
+                                                </span>
+                                              )}
+                                            </div>
+                                          ))}
+                                        </div>
+                                      )}
+                                    </div>
+
+                                    {/* 備取名單 (若有) */}
+                                    {waitList.length > 0 && (
+                                      <div className="pt-2 border-t border-slate-200">
+                                        <div className="text-[11px] font-bold text-amber-700 mb-1.5">
+                                          🟡 候補球友 ({waitList.reduce((acc, r) => acc + (r.party_size || 1), 0)}人)
+                                        </div>
+                                        <div className="grid grid-cols-2 gap-1.5">
+                                          {waitList.map((r, idx) => (
+                                            <div
+                                              key={r.id || idx}
+                                              className={`px-2 py-1 rounded-lg border text-xs flex items-center justify-between ${
+                                                r.is_mine
+                                                  ? 'bg-amber-50 border-amber-300 text-amber-900 font-bold'
+                                                  : 'bg-white border-slate-200 text-slate-700'
+                                              }`}
+                                            >
+                                              <span className="truncate">
+                                                備{r.waitlist_order || idx + 1}. {r.player_name}
+                                                {r.is_mine && <span className="ml-1 text-[10px] text-amber-700">(您)</span>}
+                                              </span>
+                                              {r.party_size > 1 && (
+                                                <span className="text-[10px] bg-slate-100 text-slate-600 px-1 rounded ml-1 shrink-0">
+                                                  +{r.party_size - 1}
+                                                </span>
+                                              )}
+                                            </div>
+                                          ))}
+                                        </div>
+                                      </div>
+                                    )}
+                                  </>
+                                );
+                              })()}
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
 
                 <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between">
                   <div className="flex items-center gap-1.5 text-xs text-slate-600">

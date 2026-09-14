@@ -57,6 +57,7 @@ export interface MatchSession {
   fee: number;
   notes?: string;
   cancel_deadline?: string;
+  is_roster_public: boolean;
   status: SessionStatus;
   created_at: string;
   updated_at: string;
