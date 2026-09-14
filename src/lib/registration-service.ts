@@ -89,3 +89,81 @@ export async function cancelRegistrationAndPromote(registrationId: string) {
 
   return { success: true };
 }
+
+/**
+ * 當團主增加正取人數上限時，自動依序遞補備取球友至正取
+ */
+export async function promoteWaitlistOnCapacityIncrease(sessionId: string, newMaxPlayers: number) {
+  // 1. 取得該場次
+  const { data: session } = await supabaseAdmin
+    .from('match_sessions')
+    .select('*')
+    .eq('id', sessionId)
+    .single();
+
+  if (!session) return;
+
+  // 2. 統計目前正取人數
+  const { data: mainRegs } = await supabaseAdmin
+    .from('registrations')
+    .select('party_size')
+    .eq('session_id', sessionId)
+    .eq('status', 'main');
+
+  let currentMainCount = (mainRegs || []).reduce((sum, r) => sum + (r.party_size || 1), 0);
+  let availableSlots = newMaxPlayers - currentMainCount;
+
+  if (availableSlots <= 0) return;
+
+  // 3. 依序遞補備取球友
+  const { data: waitlist } = await supabaseAdmin
+    .from('registrations')
+    .select('*')
+    .eq('session_id', sessionId)
+    .eq('status', 'waitlist')
+    .order('waitlist_order', { ascending: true });
+
+  if (waitlist && waitlist.length > 0) {
+    for (const player of waitlist) {
+      const party = player.party_size || 1;
+      if (party <= availableSlots) {
+        // 晉升為正取
+        await supabaseAdmin
+          .from('registrations')
+          .update({
+            status: 'main',
+            waitlist_order: null,
+          })
+          .eq('id', player.id);
+
+        availableSlots -= party;
+        currentMainCount += party;
+
+        // 發送 LINE 私訊通知遞補成功
+        try {
+          await lineClient.pushMessage({
+            to: player.user_id,
+            messages: [
+              {
+                type: 'text',
+                text: `🎉【加開名額遞補成功通知】\n您在「${session.title}」已成功由備取遞補為【正取名額】！\n時間：${new Date(session.start_time).toLocaleString('zh-TW', { timeZone: 'Asia/Taipei' })}\n地點：${session.location}\n期待您的出席！🏸`,
+              },
+            ],
+          });
+        } catch (lineErr) {
+          console.error('發送擴額遞補通知失敗:', lineErr);
+        }
+      }
+      if (availableSlots <= 0) break;
+    }
+  }
+
+  // 4. 更新場次狀態
+  const finalStatus = currentMainCount >= newMaxPlayers ? 'full' : 'open';
+  await supabaseAdmin
+    .from('match_sessions')
+    .update({ status: finalStatus })
+    .eq('id', sessionId);
+
+  invalidateSessionCache();
+}

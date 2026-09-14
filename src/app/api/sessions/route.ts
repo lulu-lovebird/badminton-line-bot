@@ -10,6 +10,7 @@ import {
   invalidateSessionCache,
   getCacheTTLSeconds,
 } from '@/lib/session-cache';
+import { promoteWaitlistOnCapacityIncrease } from '@/lib/registration-service';
 
 export const dynamic = 'force-dynamic';
 
@@ -358,6 +359,154 @@ export async function POST(req: NextRequest) {
     return NextResponse.json(session, { status: 201 });
   } catch (err: unknown) {
     const errorMsg = err instanceof Error ? err.message : '內部錯誤';
+    return NextResponse.json({ error: errorMsg }, { status: 500 });
+  }
+}
+
+// 團主修改場次內容 (限尚未開始之場次)
+export async function PATCH(req: NextRequest) {
+  try {
+    const authHeader = req.headers.get('authorization');
+    let callerUserId: string | null = null;
+
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      const token = authHeader.split(' ')[1];
+      const verified = await verifyLineIdToken(token);
+      if (verified) {
+        callerUserId = verified.sub;
+      }
+    }
+
+    const testUserId = req.headers.get('x-test-user-id');
+    if (!callerUserId && process.env.NODE_ENV !== 'production' && testUserId) {
+      callerUserId = testUserId;
+    }
+
+    if (!callerUserId) {
+      return NextResponse.json({ error: '身分驗證未通過，請重新登入' }, { status: 401 });
+    }
+
+    // 取得使用者角色
+    const { data: user } = await supabaseAdmin
+      .from('users')
+      .select('role')
+      .eq('line_user_id', callerUserId)
+      .maybeSingle();
+
+    const isSuperAdminUser = user?.role === 'admin';
+
+    const body = await req.json();
+    const {
+      id,
+      title,
+      match_type,
+      start_time,
+      end_time,
+      location,
+      court_info,
+      max_players,
+      max_waitlist,
+      level_requirement,
+      shuttlecock,
+      fee,
+      notes,
+    } = body;
+
+    if (!id) {
+      return NextResponse.json({ error: '缺少場次 ID' }, { status: 400 });
+    }
+
+    // 1. 查詢目標場次
+    const { data: existingSession, error: fetchErr } = await supabaseAdmin
+      .from('match_sessions')
+      .select('*')
+      .eq('id', id)
+      .single();
+
+    if (fetchErr || !existingSession) {
+      return NextResponse.json({ error: '找不到該場次' }, { status: 404 });
+    }
+
+    // 2. 權限檢查：只有主揪團主本人或 Super Admin 可修改
+    if (existingSession.host_user_id !== callerUserId && !isSuperAdminUser) {
+      return NextResponse.json({ error: '您不是此場次的主揪團主，無權修改' }, { status: 403 });
+    }
+
+    // 3. 時效檢查：只有時間未到達的場次可以修改
+    const now = new Date();
+    const sessionStartTime = new Date(existingSession.start_time);
+    if (sessionStartTime.getTime() <= now.getTime()) {
+      return NextResponse.json({ error: '此場次已開始或已結束，無法再進行修改' }, { status: 400 });
+    }
+
+    // 4. 正取人數下限檢查：不可小於目前已報名之正取人數
+    const { data: mainRegs } = await supabaseAdmin
+      .from('registrations')
+      .select('party_size')
+      .eq('session_id', id)
+      .eq('status', 'main');
+
+    const currentMainCount = (mainRegs || []).reduce((sum, r) => sum + (r.party_size || 1), 0);
+    const newMaxPlayers = Number(max_players) || existingSession.max_players;
+
+    if (newMaxPlayers < currentMainCount) {
+      return NextResponse.json(
+        { error: `正取人數上限 (${newMaxPlayers}人) 不可小於目前已報名正取人數 (${currentMainCount}人)` },
+        { status: 400 }
+      );
+    }
+
+    // 5. 執行更新
+    const updatePayload: Record<string, unknown> = {
+      updated_at: new Date().toISOString(),
+    };
+
+    if (title !== undefined) updatePayload.title = title.trim();
+    if (match_type !== undefined) updatePayload.match_type = match_type;
+    if (start_time !== undefined) updatePayload.start_time = toTaipeiISOString(start_time);
+    if (end_time !== undefined) updatePayload.end_time = toTaipeiISOString(end_time);
+    if (location !== undefined) updatePayload.location = location.trim();
+    if (court_info !== undefined) updatePayload.court_info = court_info.trim();
+    if (max_players !== undefined) updatePayload.max_players = newMaxPlayers;
+    if (max_waitlist !== undefined) updatePayload.max_waitlist = Number(max_waitlist) || 5;
+    if (level_requirement !== undefined) updatePayload.level_requirement = level_requirement.trim();
+    if (shuttlecock !== undefined) updatePayload.shuttlecock = shuttlecock.trim();
+    if (fee !== undefined) updatePayload.fee = Number(fee) || 0;
+    if (notes !== undefined) updatePayload.notes = notes.trim();
+
+    // 更新狀態
+    if (newMaxPlayers > currentMainCount) {
+      updatePayload.status = 'open';
+    } else if (newMaxPlayers === currentMainCount) {
+      updatePayload.status = 'full';
+    }
+
+    const { data: updatedSession, error: updateErr } = await supabaseAdmin
+      .from('match_sessions')
+      .update(updatePayload)
+      .eq('id', id)
+      .select()
+      .single();
+
+    if (updateErr) {
+      return NextResponse.json({ error: updateErr.message }, { status: 500 });
+    }
+
+    // 6. 若正取人數上限調高，自動依序遞補備取球友至正取
+    if (newMaxPlayers > existingSession.max_players) {
+      try {
+        await promoteWaitlistOnCapacityIncrease(id, newMaxPlayers);
+      } catch (promoteErr) {
+        console.error('名額擴增遞補處理錯誤:', promoteErr);
+      }
+    }
+
+    // 7. 🔄 立即失效場次快取
+    invalidateSessionCache();
+
+    return NextResponse.json(updatedSession);
+  } catch (err: unknown) {
+    const errorMsg = err instanceof Error ? err.message : '修改場次失敗';
     return NextResponse.json({ error: errorMsg }, { status: 500 });
   }
 }

@@ -39,7 +39,7 @@ export function createSessionFlexMessage(session: MatchSession, liffBaseUrl: str
   const s = formatTaipei(startDate);
   const e = formatTaipei(endDate);
   const timeStr = `${s.month}/${s.day} (${s.weekday}) ${s.hours}:${s.mins} - ${e.hours}:${e.mins}`;
-  const matchTypeStr = session.match_type === 'single' ? '單打' : '雙打';
+  const matchTypeStr = session.match_type === 'single' ? '單打' : session.match_type === 'any' ? '不限' : '雙打';
 
   const isFull = session.status === 'full';
   const headerColor = isFull ? '#1B5E20' : '#2E7D32'; // 深綠/淺綠

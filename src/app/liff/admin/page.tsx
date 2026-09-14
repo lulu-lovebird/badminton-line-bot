@@ -3,7 +3,7 @@
 import React, { useState, useEffect, Suspense } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
-import { PlusCircle, Users, CheckCircle, Clock, Calendar, MapPin, Send, AlertCircle, RefreshCw, ShieldAlert, Key, Copy, Shield, UserPlus, FileText, User, Share2 } from 'lucide-react';
+import { PlusCircle, Users, CheckCircle, Clock, Calendar, MapPin, Send, AlertCircle, RefreshCw, ShieldAlert, Key, Copy, Shield, UserPlus, FileText, User, Share2, Pencil, X } from 'lucide-react';
 import { MatchSession, Registration } from '@/types/database';
 import { initLiff } from '@/lib/liff-client';
 
@@ -193,6 +193,123 @@ function AdminDashboardContent() {
       start_time: newStart,
       end_time: newEnd,
     }));
+  }
+
+  // 編輯場次狀態
+  const [editingSession, setEditingSession] = useState<MatchSession | null>(null);
+  const [editForm, setEditForm] = useState<{
+    id: string;
+    title: string;
+    match_type: string;
+    start_time: string;
+    end_time: string;
+    location: string;
+    court_info: string;
+    max_players: number;
+    max_waitlist: number;
+    level_requirement: string;
+    shuttlecock: string;
+    fee: number;
+    notes: string;
+    current_players: number;
+  }>({
+    id: '',
+    title: '',
+    match_type: 'double',
+    start_time: '',
+    end_time: '',
+    location: '',
+    court_info: '',
+    max_players: 8,
+    max_waitlist: 4,
+    level_requirement: '初中級 (4~7級)',
+    shuttlecock: '勝利比賽球 (綠標)',
+    fee: 200,
+    notes: '',
+    current_players: 0,
+  });
+  const [isUpdating, setIsUpdating] = useState(false);
+  const [editNotice, setEditNotice] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
+  function handleOpenEditSession(s: MatchSession) {
+    const isPast = new Date(s.start_time).getTime() <= Date.now();
+    if (isPast) {
+      alert('⚠️ 此場次時間已開始或結束，無法再修改內容。');
+      return;
+    }
+
+    setEditForm({
+      id: s.id,
+      title: s.title,
+      match_type: s.match_type || 'double',
+      start_time: toDatetimeLocalString(s.start_time),
+      end_time: toDatetimeLocalString(s.end_time),
+      location: s.location || '',
+      court_info: s.court_info || '',
+      max_players: s.max_players || 8,
+      max_waitlist: s.max_waitlist || 4,
+      level_requirement: s.level_requirement || '初中級 (4~7級)',
+      shuttlecock: s.shuttlecock || '勝利比賽球 (綠標)',
+      fee: s.fee ?? 200,
+      notes: s.notes || '',
+      current_players: s.current_players || 0,
+    });
+    setEditNotice(null);
+    setEditingSession(s);
+  }
+
+  function handleEditStartTimeChange(newStart: string) {
+    if (!newStart) {
+      setEditForm((prev) => ({ ...prev, start_time: '' }));
+      return;
+    }
+    const newEnd = addHoursToDatetimeLocal(newStart, 2);
+    setEditForm((prev) => ({
+      ...prev,
+      start_time: newStart,
+      end_time: newEnd,
+    }));
+  }
+
+  async function handleUpdateSession(e: React.FormEvent) {
+    e.preventDefault();
+    if (!editingSession) return;
+    setIsUpdating(true);
+    setEditNotice(null);
+
+    try {
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      if (idToken) headers['Authorization'] = `Bearer ${idToken}`;
+      else if (userProfile?.line_user_id) headers['x-test-user-id'] = userProfile.line_user_id;
+
+      const res = await fetch('/api/sessions', {
+        method: 'PATCH',
+        headers,
+        body: JSON.stringify(editForm),
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || '修改場次失敗');
+      }
+
+      setEditNotice({ type: 'success', text: '🎉 場次修改成功！名額與場地資訊已即時更新。' });
+      await fetchSessions(idToken, userProfile?.line_user_id, true);
+
+      if (selectedSession && selectedSession.id === editingSession.id) {
+        setSelectedSession((prev) => (prev ? { ...prev, ...data } : data));
+      }
+
+      setTimeout(() => {
+        setEditingSession(null);
+        setEditNotice(null);
+      }, 1200);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : '更新失敗';
+      setEditNotice({ type: 'error', text: msg });
+    } finally {
+      setIsUpdating(false);
+    }
   }
 
   useEffect(() => {
@@ -786,8 +903,9 @@ function AdminDashboardContent() {
                 onChange={(e) => setForm({ ...form, match_type: e.target.value })}
                 className="w-full text-xs border rounded-lg p-2.5 mt-1 bg-white"
               >
-                <option value="double">雙打 (4人/場)</option>
-                <option value="single">單打 (2人/場)</option>
+                <option value="double">雙打</option>
+                <option value="single">單打</option>
+                <option value="any">不限</option>
               </select>
             </div>
             <div>
@@ -1077,6 +1195,25 @@ function AdminDashboardContent() {
                         <Share2 size={12} className="text-emerald-600" />
                         <span>推播卡片</span>
                       </button>
+                      {/* ✏️ 編輯場次按鈕 (限尚未開始之場次) */}
+                      {new Date(s.start_time).getTime() > Date.now() ? (
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleOpenEditSession(s);
+                          }}
+                          className="px-2 py-1 bg-blue-50 hover:bg-blue-100 text-blue-800 border border-blue-200 rounded-lg font-bold flex items-center gap-1 active:scale-95 transition-all text-xs"
+                          title="修改場次時間、地點或人數上限"
+                        >
+                          <Pencil size={12} className="text-blue-600" />
+                          <span>修改場次</span>
+                        </button>
+                      ) : (
+                        <span className="px-2 py-0.5 bg-slate-100 text-slate-400 rounded-md text-[11px]">
+                          已結束
+                        </span>
+                      )}
                     </div>
                     <span className="text-emerald-600 font-bold">管理名單 →</span>
                   </div>
@@ -1089,22 +1226,35 @@ function AdminDashboardContent() {
 
       {selectedSession && (
         <div className="space-y-4">
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between flex-wrap gap-2">
             <button
               onClick={() => setSelectedSession(null)}
               className="text-xs font-bold text-emerald-600 flex items-center gap-1 hover:underline"
             >
               ← 返回場次總覽
             </button>
-            <button
-              type="button"
-              onClick={() => handleCopySessionToNextWeek(selectedSession)}
-              className="px-3 py-1 bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-300 rounded-lg font-bold flex items-center gap-1 text-xs active:scale-95 transition-all shadow-sm"
-              title="直接沿用此場次所有設定，順延 7 天開下週團"
-            >
-              <Copy size={13} className="text-amber-600" />
-              <span>複製本場到下週 (+7天)</span>
-            </button>
+            <div className="flex items-center gap-1.5 flex-wrap">
+              {new Date(selectedSession.start_time).getTime() > Date.now() && (
+                <button
+                  type="button"
+                  onClick={() => handleOpenEditSession(selectedSession)}
+                  className="px-3 py-1 bg-blue-50 hover:bg-blue-100 text-blue-800 border border-blue-300 rounded-lg font-bold flex items-center gap-1 text-xs active:scale-95 transition-all shadow-sm"
+                  title="修改場次時間、地點或人數上限"
+                >
+                  <Pencil size={13} className="text-blue-600" />
+                  <span>修改場次</span>
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={() => handleCopySessionToNextWeek(selectedSession)}
+                className="px-3 py-1 bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-300 rounded-lg font-bold flex items-center gap-1 text-xs active:scale-95 transition-all shadow-sm"
+                title="直接沿用此場次所有設定，順延 7 天開下週團"
+              >
+                <Copy size={13} className="text-amber-600" />
+                <span>複製本場到下週 (+7天)</span>
+              </button>
+            </div>
           </div>
 
           <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm">
@@ -1240,6 +1390,267 @@ function AdminDashboardContent() {
                 ))}
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* ✏️ 編輯場次 Modal (彈窗) */}
+      {editingSession && (
+        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-3 animate-fadeIn">
+          <div className="bg-white rounded-2xl max-w-md w-full max-h-[92vh] overflow-y-auto shadow-2xl border border-slate-200">
+            {/* 彈窗標題列 */}
+            <div className="sticky top-0 bg-white px-4 py-3.5 border-b border-slate-100 flex items-center justify-between z-10">
+              <div className="flex items-center gap-2">
+                <span className="p-1.5 bg-blue-50 text-blue-600 rounded-lg">
+                  <Pencil size={16} />
+                </span>
+                <div>
+                  <h3 className="text-sm font-bold text-slate-800">修改零打場次內容</h3>
+                  <p className="text-[11px] text-slate-400">僅限未開始之場次可進行編輯</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setEditingSession(null)}
+                className="p-1 text-slate-400 hover:text-slate-600 rounded-lg hover:bg-slate-100 transition"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            {/* 彈窗表單 */}
+            <form onSubmit={handleUpdateSession} className="p-4 space-y-3.5">
+              {editNotice && (
+                <div
+                  className={`p-3 rounded-xl text-xs flex items-center gap-2 ${
+                    editNotice.type === 'success'
+                      ? 'bg-emerald-50 text-emerald-800 border border-emerald-200'
+                      : 'bg-red-50 text-red-800 border border-red-200'
+                  }`}
+                >
+                  <AlertCircle size={15} className="shrink-0" />
+                  <span>{editNotice.text}</span>
+                </div>
+              )}
+
+              <div>
+                <label className="text-xs font-semibold text-slate-700">場次標題</label>
+                <input
+                  type="text"
+                  required
+                  value={editForm.title}
+                  onChange={(e) => setEditForm({ ...editForm, title: e.target.value })}
+                  className="w-full text-xs border rounded-lg p-2.5 mt-1 outline-none focus:border-blue-500"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="text-xs font-semibold text-slate-700">型式</label>
+                  <select
+                    value={editForm.match_type}
+                    onChange={(e) => setEditForm({ ...editForm, match_type: e.target.value })}
+                    className="w-full text-xs border rounded-lg p-2.5 mt-1 bg-white focus:border-blue-500 outline-none"
+                  >
+                    <option value="double">雙打</option>
+                    <option value="single">單打</option>
+                    <option value="any">不限</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="text-xs font-semibold text-slate-700">每人費用 ($)</label>
+                  <input
+                    type="number"
+                    value={editForm.fee}
+                    onChange={(e) => setEditForm({ ...editForm, fee: Number(e.target.value) })}
+                    className="w-full text-xs border rounded-lg p-2.5 mt-1 outline-none focus:border-blue-500"
+                  />
+                </div>
+              </div>
+
+              {/* 日期與時間設定 (含星期幾與自動預設2小時) */}
+              <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 space-y-2.5">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                  <div>
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="text-xs font-bold text-slate-700 flex items-center gap-1">
+                        <Calendar className="w-3.5 h-3.5 text-blue-600" />
+                        開始時間
+                      </label>
+                      {editForm.start_time && getWeekdayString(editForm.start_time) && (
+                        <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-bold bg-blue-100 text-blue-800 border border-blue-200">
+                          📅 {getWeekdayString(editForm.start_time)}
+                        </span>
+                      )}
+                    </div>
+                    <input
+                      type="datetime-local"
+                      required
+                      value={editForm.start_time}
+                      onChange={(e) => handleEditStartTimeChange(e.target.value)}
+                      className="w-full text-xs border border-slate-300 rounded-lg p-2 bg-white focus:ring-2 focus:ring-blue-500 outline-none"
+                    />
+                  </div>
+
+                  <div>
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="text-xs font-bold text-slate-700 flex items-center gap-1">
+                        <Clock className="w-3.5 h-3.5 text-indigo-600" />
+                        結束時間
+                      </label>
+                      {editForm.end_time && getWeekdayString(editForm.end_time) && (
+                        <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-bold bg-indigo-100 text-indigo-800 border border-indigo-200">
+                          📅 {getWeekdayString(editForm.end_time)}
+                        </span>
+                      )}
+                    </div>
+                    <input
+                      type="datetime-local"
+                      required
+                      value={editForm.end_time}
+                      onChange={(e) => setEditForm({ ...editForm, end_time: e.target.value })}
+                      className="w-full text-xs border border-slate-300 rounded-lg p-2 bg-white focus:ring-2 focus:ring-indigo-500 outline-none"
+                    />
+                  </div>
+                </div>
+
+                {/* 快捷時長按鈕 */}
+                {editForm.start_time && (
+                  <div className="flex items-center gap-1.5 flex-wrap pt-1 border-t border-slate-200/70">
+                    <span className="text-[11px] text-slate-500 font-medium">快捷時長：</span>
+                    {[2, 2.5, 3, 4].map((h) => {
+                      const currentDuration = calculateDurationHours(editForm.start_time, editForm.end_time);
+                      const isSelected = currentDuration === h;
+                      return (
+                        <button
+                          key={h}
+                          type="button"
+                          onClick={() =>
+                            setEditForm((prev: any) => ({
+                              ...prev,
+                              end_time: addHoursToDatetimeLocal(prev.start_time, h),
+                            }))
+                          }
+                          className={`px-2 py-0.5 text-xs rounded-md font-bold transition-all ${
+                            isSelected
+                              ? 'bg-blue-600 text-white shadow-sm'
+                              : 'bg-white text-slate-700 border border-slate-200 hover:bg-slate-100'
+                          }`}
+                        >
+                          +{h}h
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+
+              <div>
+                <label className="text-xs font-semibold text-slate-700">地點與球場資訊</label>
+                <input
+                  type="text"
+                  required
+                  value={editForm.location}
+                  onChange={(e) => setEditForm({ ...editForm, location: e.target.value })}
+                  className="w-full text-xs border rounded-lg p-2.5 mt-1 outline-none focus:border-blue-500"
+                />
+              </div>
+
+              <div>
+                <label className="text-xs font-semibold text-slate-700">場地編號/面數備註 (選填)</label>
+                <input
+                  type="text"
+                  placeholder="例: 第3、4面場地"
+                  value={editForm.court_info}
+                  onChange={(e) => setEditForm({ ...editForm, court_info: e.target.value })}
+                  className="w-full text-xs border rounded-lg p-2.5 mt-1 outline-none focus:border-blue-500"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs font-semibold text-slate-700">正取上限人數</label>
+                    {editForm.current_players > 0 && (
+                      <span className="text-[10px] text-blue-600 font-bold">
+                        (已報{editForm.current_players}人)
+                      </span>
+                    )}
+                  </div>
+                  <input
+                    type="number"
+                    min={editForm.current_players || 1}
+                    required
+                    value={editForm.max_players}
+                    onChange={(e) => setEditForm({ ...editForm, max_players: Number(e.target.value) })}
+                    className="w-full text-xs border rounded-lg p-2.5 mt-1 outline-none focus:border-blue-500"
+                  />
+                  <p className="text-[10px] text-slate-400 mt-0.5">
+                    不可低於已正取 ({editForm.current_players}人)
+                  </p>
+                </div>
+                <div>
+                  <label className="text-xs font-semibold text-slate-700">備取上限人數</label>
+                  <input
+                    type="number"
+                    min={0}
+                    value={editForm.max_waitlist}
+                    onChange={(e) => setEditForm({ ...editForm, max_waitlist: Number(e.target.value) })}
+                    className="w-full text-xs border rounded-lg p-2.5 mt-1 outline-none focus:border-blue-500"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="text-xs font-semibold text-slate-700">建議程度</label>
+                  <input
+                    type="text"
+                    value={editForm.level_requirement}
+                    onChange={(e) => setEditForm({ ...editForm, level_requirement: e.target.value })}
+                    className="w-full text-xs border rounded-lg p-2.5 mt-1 outline-none focus:border-blue-500"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-semibold text-slate-700">使用球種</label>
+                  <input
+                    type="text"
+                    value={editForm.shuttlecock}
+                    onChange={(e) => setEditForm({ ...editForm, shuttlecock: e.target.value })}
+                    className="w-full text-xs border rounded-lg p-2.5 mt-1 outline-none focus:border-blue-500"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="text-xs font-semibold text-slate-700">注意事項與備註</label>
+                <textarea
+                  rows={2}
+                  value={editForm.notes}
+                  onChange={(e) => setEditForm({ ...editForm, notes: e.target.value })}
+                  className="w-full text-xs border rounded-lg p-2 mt-1 outline-none focus:border-blue-500"
+                />
+              </div>
+
+              {/* 操作按鈕 */}
+              <div className="pt-2 flex items-center justify-end gap-2 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setEditingSession(null)}
+                  className="px-4 py-2 text-xs font-semibold text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-xl transition"
+                >
+                  取消
+                </button>
+                <button
+                  type="submit"
+                  disabled={isUpdating}
+                  className="px-5 py-2 text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-50 rounded-xl transition shadow-sm flex items-center gap-1.5"
+                >
+                  {isUpdating && <RefreshCw size={12} className="animate-spin" />}
+                  <span>{isUpdating ? '儲存中...' : '確認儲存修改'}</span>
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

@@ -229,7 +229,7 @@ function SessionListContent() {
                 <div className="flex items-center justify-between mb-2">
                   <div className="flex items-center gap-1.5 flex-wrap">
                     <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-slate-100 text-slate-700">
-                      {s.match_type === 'single' ? '單打' : '雙打'}
+                      {s.match_type === 'single' ? '單打' : s.match_type === 'any' ? '不限' : '雙打'}
                     </span>
                     <span className="text-xs px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-800 border border-emerald-200 font-medium">
                       👤 團主：{s.host_name || '球團團主'}
