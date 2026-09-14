@@ -4,6 +4,7 @@ import { cancelRegistrationAndPromote } from '@/lib/registration-service';
 import { verifyLineIdToken } from '@/lib/auth';
 import { isUserInGroup } from '@/lib/line-group-auth';
 import { lineClient } from '@/lib/line';
+import { invalidateSessionCache } from '@/lib/session-cache';
 
 async function getCallerIdentity(req: NextRequest): Promise<{ userId: string; role: string } | null> {
   const authHeader = req.headers.get('authorization');
@@ -277,6 +278,9 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: rErr.message }, { status: 500 });
     }
 
+    // 🔄 立即失效場次快取，確保球友報名後名額即時扣除
+    invalidateSessionCache();
+
     return NextResponse.json(newReg, { status: 201 });
   } catch (err: unknown) {
     const errorMsg = err instanceof Error ? err.message : '報名處理失敗';
@@ -314,6 +318,8 @@ export async function PATCH(req: NextRequest) {
       }
 
       await cancelRegistrationAndPromote(registration_id);
+      // 🔄 立即失效場次快取，確保遞補與釋出名額即時呈現
+      invalidateSessionCache();
       return NextResponse.json({ message: '已取消報名並完成遞補程序' });
     }
 

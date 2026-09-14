@@ -3,17 +3,45 @@ import { supabaseAdmin } from '@/lib/supabase';
 import { lineClient, createSessionFlexMessage } from '@/lib/line';
 import { verifyLineIdToken } from '@/lib/auth';
 import { isUserInGroup } from '@/lib/line-group-auth';
+import {
+  generateSessionCacheKey,
+  getSessionCache,
+  setSessionCache,
+  invalidateSessionCache,
+  getCacheTTLSeconds,
+} from '@/lib/session-cache';
 
 export const dynamic = 'force-dynamic';
 
-// 取得場次清單 (支援群組場次與全域公開場次)
+// 取得場次清單 (支援快取、群組場次與全域公開場次)
 export async function GET(req: NextRequest) {
-  try {
-    const { searchParams } = new URL(req.url);
-    const date = searchParams.get('date');
-    const status = searchParams.get('status');
-    const groupId = searchParams.get('groupId');
+  const { searchParams } = new URL(req.url);
+  const date = searchParams.get('date');
+  const status = searchParams.get('status');
+  const groupId = searchParams.get('groupId');
+  const isRefresh =
+    searchParams.get('refresh') === 'true' ||
+    req.headers.get('cache-control')?.includes('no-cache');
 
+  const cacheKey = generateSessionCacheKey({ groupId, date, status });
+  const ttl = getCacheTTLSeconds();
+
+  // 1. 若非強制刷新，優先檢查記憶體快取 (命中時 0 次 Supabase 連線)
+  if (!isRefresh) {
+    const cached = getSessionCache(cacheKey, false);
+    if (cached.hit && cached.data) {
+      return NextResponse.json(cached.data, {
+        headers: {
+          'X-Cache': 'HIT',
+          'X-Cache-Age': `${cached.ageSeconds}s`,
+          'X-Cache-TTL': `${ttl}s`,
+          'Cache-Control': `public, max-age=${Math.min(ttl, 15)}, stale-while-revalidate=30`,
+        },
+      });
+    }
+  }
+
+  try {
     let query = supabaseAdmin
       .from('match_sessions')
       .select('*')
@@ -39,6 +67,18 @@ export async function GET(req: NextRequest) {
 
     if (error) {
       console.error('查詢 match_sessions 錯誤:', error);
+      // 🛡️ 容錯降級：若 Supabase 發生 502/503 短暫故障，嘗試使用 Stale 快取回傳，避免球友白畫面
+      const stale = getSessionCache(cacheKey, true);
+      if (stale.hit && stale.data) {
+        console.warn(`[Cache Fallback] Supabase 查詢異常 (${error.message})，使用 Stale 快取降級回傳`);
+        return NextResponse.json(stale.data, {
+          headers: {
+            'X-Cache': 'STALE-FALLBACK',
+            'X-Cache-Age': `${stale.ageSeconds}s`,
+            'X-Warning': 'Supabase temporary error, served from stale cache',
+          },
+        });
+      }
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
 
@@ -103,13 +143,31 @@ export async function GET(req: NextRequest) {
       };
     });
 
+    // 寫入智慧快取
+    setSessionCache(cacheKey, computed);
+
     return NextResponse.json(computed, {
       headers: {
-        'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
+        'X-Cache': isRefresh ? 'BYPASS' : 'MISS',
+        'X-Cache-TTL': `${ttl}s`,
+        'Cache-Control': `public, max-age=${Math.min(ttl, 15)}, stale-while-revalidate=30`,
       },
     });
   } catch (err: unknown) {
     const errorMsg = err instanceof Error ? err.message : '內部伺服器錯誤';
+    console.error('場次處理例外錯誤:', err);
+    // 🛡️ 容錯降級：伺服器處理例外時嘗試 Stale 快取
+    const stale = getSessionCache(cacheKey, true);
+    if (stale.hit && stale.data) {
+      console.warn(`[Cache Fallback] 例外錯誤 (${errorMsg})，使用 Stale 快取降級回傳`);
+      return NextResponse.json(stale.data, {
+        headers: {
+          'X-Cache': 'STALE-FALLBACK',
+          'X-Cache-Age': `${stale.ageSeconds}s`,
+          'X-Warning': 'Server exception, served from stale cache',
+        },
+      });
+    }
     return NextResponse.json({ error: errorMsg }, { status: 500 });
   }
 }
@@ -246,6 +304,9 @@ export async function POST(req: NextRequest) {
         console.error('推播至群組失敗:', pushErr);
       }
     }
+
+    // 🔄 立即失效場次快取，確保新建立的場次秒級呈現在前端
+    invalidateSessionCache();
 
     return NextResponse.json(session, { status: 201 });
   } catch (err: unknown) {

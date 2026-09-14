@@ -1,6 +1,7 @@
 import { supabaseAdmin } from './supabase';
 import { lineClient } from './line';
 import { MatchSession, Registration } from '@/types/database';
+import { invalidateSessionCache } from './session-cache';
 
 /**
  * 處理球友取消報名，並自動將備取 1 號遞補為正取
@@ -82,6 +83,9 @@ export async function cancelRegistrationAndPromote(registrationId: string) {
         .eq('id', reg.session_id);
     }
   }
+
+  // 🔄 遞補完成，立即失效場次快取
+  invalidateSessionCache();
 
   return { success: true };
 }

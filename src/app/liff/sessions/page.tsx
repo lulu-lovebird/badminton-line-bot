@@ -19,21 +19,21 @@ function SessionListContent() {
 
   const { userProfile, idToken } = useLiff();
 
-  // 取得場次 (強制 no-store 杜絕快取問題)
-  async function fetchSessions(dateFilter = selectedDate, groupFilter = currentGroupId) {
+  // 取得場次 (支援智慧快取與強制刷新)
+  async function fetchSessions(dateFilter = selectedDate, groupFilter = currentGroupId, isManualRefresh = false) {
     setLoading(true);
     try {
       const params = new URLSearchParams();
       if (groupFilter) params.append('groupId', groupFilter);
       if (dateFilter) params.append('date', dateFilter);
-      // 加入隨機時間戳徹底打碎瀏覽器與 CDN 快取
-      params.append('_t', Date.now().toString());
+      if (isManualRefresh) {
+        params.append('refresh', 'true');
+        params.append('_t', Date.now().toString());
+      }
 
       const res = await fetch(`/api/sessions?${params.toString()}`, {
-        cache: 'no-store',
-        headers: {
-          'Cache-Control': 'no-cache',
-        },
+        cache: isManualRefresh ? 'no-store' : 'default',
+        headers: isManualRefresh ? { 'Cache-Control': 'no-cache' } : {},
       });
 
       if (res.ok) {
@@ -100,7 +100,7 @@ function SessionListContent() {
         });
       }
 
-      fetchSessions();
+      fetchSessions(selectedDate, currentGroupId, true);
     } catch (err: unknown) {
       const errorMsg = err instanceof Error ? err.message : '報名時發生錯誤';
       setMessage({ type: 'error', text: errorMsg });
@@ -118,7 +118,7 @@ function SessionListContent() {
             🏸 開放零打場次報名
           </h1>
           <button
-            onClick={() => fetchSessions()}
+            onClick={() => fetchSessions(selectedDate, currentGroupId, true)}
             disabled={loading}
             className="p-1.5 rounded-lg bg-white/20 hover:bg-white/30 active:scale-95 transition-all text-xs flex items-center gap-1"
             title="重新整理場次"

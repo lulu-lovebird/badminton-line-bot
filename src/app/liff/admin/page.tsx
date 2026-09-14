@@ -276,7 +276,7 @@ function AdminDashboardContent() {
     }
   }
 
-  async function fetchSessions(token?: string, userId?: string) {
+  async function fetchSessions(token?: string, userId?: string, forceRefresh = false) {
     setLoading(true);
     try {
       const currentToken = token || idToken;
@@ -285,7 +285,11 @@ function AdminDashboardContent() {
       else if (userId) headers['x-test-user-id'] = userId;
       else headers['x-test-user-id'] = 'host_admin_001';
 
-      const qs = urlGroupId ? `?groupId=${urlGroupId}` : '';
+      const params = new URLSearchParams();
+      if (urlGroupId) params.append('groupId', urlGroupId);
+      if (forceRefresh) params.append('refresh', 'true');
+      const qs = params.toString() ? `?${params.toString()}` : '';
+
       const res = await fetch(`/api/sessions${qs}`, { headers });
       const data = await res.json();
       setSessions(Array.isArray(data) ? data : []);
@@ -993,8 +997,12 @@ function AdminDashboardContent() {
             <h2 className="text-xs font-bold text-slate-500 uppercase tracking-wider">
               {urlGroupId ? '本群場次總覽' : '進行中與開放場次'}
             </h2>
-            <button onClick={() => fetchSessions(idToken, userProfile?.line_user_id)} className="text-slate-400 hover:text-slate-600">
-              <RefreshCw size={14} />
+            <button
+              onClick={() => fetchSessions(idToken, userProfile?.line_user_id, true)}
+              className="text-slate-400 hover:text-slate-600 active:scale-95 transition-all p-1 rounded"
+              title="強制重新整理 (繞過快取)"
+            >
+              <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
             </button>
           </div>
 
