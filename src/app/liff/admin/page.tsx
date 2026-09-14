@@ -3,7 +3,7 @@
 import React, { useState, useEffect, Suspense } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
-import { PlusCircle, Users, CheckCircle, Clock, MapPin, Send, AlertCircle, RefreshCw, ShieldAlert, Key, Copy, Shield, UserPlus, FileText, User, Share2 } from 'lucide-react';
+import { PlusCircle, Users, CheckCircle, Clock, Calendar, MapPin, Send, AlertCircle, RefreshCw, ShieldAlert, Key, Copy, Shield, UserPlus, FileText, User, Share2 } from 'lucide-react';
 import { MatchSession, Registration } from '@/types/database';
 import { initLiff } from '@/lib/liff-client';
 
@@ -33,6 +33,71 @@ function toDatetimeLocalString(dateStr: string | Date, addDays = 0): string {
   const minute = get('minute');
 
   return `${year}-${month}-${day}T${hour}:${minute}`;
+}
+
+// 取得星期幾字串 (例如："週六", "週日", "週一" 等) - 依據 datetime-local (YYYY-MM-DDTHH:mm)
+function getWeekdayString(dtStr: string): string {
+  if (!dtStr) return '';
+  const [datePart] = dtStr.split('T');
+  if (!datePart) return '';
+  const [y, m, d] = datePart.split('-').map(Number);
+  if (!y || !m || !d) return '';
+  const dayIndex = new Date(Date.UTC(y, m - 1, d, 12)).getUTCDay();
+  const weekdays = ['週日', '週一', '週二', '週三', '週四', '週五', '週六'];
+  return weekdays[dayIndex] || '';
+}
+
+// 根據開始時間自動推算結束時間（預設 +2 小時，亦可指定小時數）
+function addHoursToDatetimeLocal(dtStr: string, hours = 2): string {
+  if (!dtStr) return '';
+  const [datePart, timePart = '00:00'] = dtStr.split('T');
+  const [y, m, d] = datePart.split('-').map(Number);
+  const [h, min] = timePart.split(':').map(Number);
+  if (!y || !m || !d) return '';
+  const dObj = new Date(Date.UTC(y, m - 1, d, h || 0, min || 0));
+  const target = new Date(dObj.getTime() + hours * 60 * 60 * 1000);
+  const ny = target.getUTCFullYear();
+  const nm = String(target.getUTCMonth() + 1).padStart(2, '0');
+  const nd = String(target.getUTCDate()).padStart(2, '0');
+  const nh = String(target.getUTCHours()).padStart(2, '0');
+  const nmin = String(target.getUTCMinutes()).padStart(2, '0');
+  return `${ny}-${nm}-${nd}T${nh}:${nmin}`;
+}
+
+// 計算開始與結束時間的時長（以小時為單位，如 2 或 2.5）
+function calculateDurationHours(startStr: string, endStr: string): number | null {
+  if (!startStr || !endStr) return null;
+  const [sDate, sTime = '00:00'] = startStr.split('T');
+  const [eDate, eTime = '00:00'] = endStr.split('T');
+  if (!sDate || !eDate) return null;
+  const [sy, sm, sd] = sDate.split('-').map(Number);
+  const [sh, smin] = sTime.split(':').map(Number);
+  const [ey, em, ed] = eDate.split('-').map(Number);
+  const [eh, emin] = eTime.split(':').map(Number);
+  if (!sy || !sm || !sd || !ey || !em || !ed) return null;
+  const sUtc = Date.UTC(sy, sm - 1, sd, sh || 0, smin || 0);
+  const eUtc = Date.UTC(ey, em - 1, ed, eh || 0, emin || 0);
+  const diffMs = eUtc - sUtc;
+  if (diffMs <= 0) return null;
+  const hours = diffMs / (1000 * 60 * 60);
+  return Math.round(hours * 10) / 10;
+}
+
+// 格式化日期提示文字（例如："9月19日"）
+function formatDateSummary(dtStr: string): string {
+  if (!dtStr) return '';
+  const [datePart] = dtStr.split('T');
+  if (!datePart) return '';
+  const [y, m, d] = datePart.split('-').map(Number);
+  if (!y || !m || !d) return '';
+  return `${m}月${d}日`;
+}
+
+// 格式化時間（例如："18:00"）
+function formatTimeOnly(dtStr: string): string {
+  if (!dtStr) return '';
+  const [, timePart] = dtStr.split('T');
+  return timePart || '';
 }
 
 function AdminDashboardContent() {
@@ -114,6 +179,20 @@ function AdminDashboardContent() {
     setActiveTab('create');
     setSelectedSession(null);
     window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
+  // 變更開始時間時，自動將結束時間預設為開始時間 + 2 小時
+  function handleStartTimeChange(newStart: string) {
+    if (!newStart) {
+      setForm((prev) => ({ ...prev, start_time: '' }));
+      return;
+    }
+    const newEnd = addHoursToDatetimeLocal(newStart, 2);
+    setForm((prev) => ({
+      ...prev,
+      start_time: newStart,
+      end_time: newEnd,
+    }));
   }
 
   useEffect(() => {
@@ -718,27 +797,122 @@ function AdminDashboardContent() {
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-2">
-            <div>
-              <label className="text-xs font-semibold text-slate-600">開始時間</label>
-              <input
-                type="datetime-local"
-                required
-                value={form.start_time}
-                onChange={(e) => setForm({ ...form, start_time: e.target.value })}
-                className="w-full text-xs border rounded-lg p-2 mt-1"
-              />
+          {/* 日期與時間設定 (含星期幾與自動預設2小時) */}
+          <div className="bg-slate-50 border border-slate-200 rounded-xl p-3.5 space-y-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {/* 開始時間 */}
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
+                    <Calendar className="w-3.5 h-3.5 text-blue-600" />
+                    開始時間
+                  </label>
+                  {form.start_time && getWeekdayString(form.start_time) ? (
+                    <span className="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-bold bg-blue-100 text-blue-800 border border-blue-200 shadow-sm">
+                      📅 {getWeekdayString(form.start_time)}
+                    </span>
+                  ) : (
+                    <span className="text-[11px] text-slate-400">請選日期時間</span>
+                  )}
+                </div>
+                <input
+                  type="datetime-local"
+                  required
+                  value={form.start_time}
+                  onChange={(e) => handleStartTimeChange(e.target.value)}
+                  className="w-full text-xs font-medium border border-slate-300 rounded-lg p-2.5 bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                />
+              </div>
+
+              {/* 結束時間 */}
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
+                    <Clock className="w-3.5 h-3.5 text-indigo-600" />
+                    結束時間
+                  </label>
+                  {form.end_time && getWeekdayString(form.end_time) ? (
+                    <span className="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-bold bg-indigo-100 text-indigo-800 border border-indigo-200 shadow-sm">
+                      📅 {getWeekdayString(form.end_time)}
+                    </span>
+                  ) : (
+                    <span className="text-[11px] text-slate-400">預設+2小時</span>
+                  )}
+                </div>
+                <input
+                  type="datetime-local"
+                  required
+                  value={form.end_time}
+                  onChange={(e) => setForm({ ...form, end_time: e.target.value })}
+                  className="w-full text-xs font-medium border border-slate-300 rounded-lg p-2.5 bg-white focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none"
+                />
+              </div>
             </div>
-            <div>
-              <label className="text-xs font-semibold text-slate-600">結束時間</label>
-              <input
-                type="datetime-local"
-                required
-                value={form.end_time}
-                onChange={(e) => setForm({ ...form, end_time: e.target.value })}
-                className="w-full text-xs border rounded-lg p-2 mt-1"
-              />
-            </div>
+
+            {/* 快速時長選擇按鈕 */}
+            {form.start_time && (
+              <div className="flex items-center justify-between pt-1 border-t border-slate-200/70 flex-wrap gap-2">
+                <div className="flex items-center gap-1 text-[11px] text-slate-500 font-medium">
+                  <span>⚡ 快捷時長：</span>
+                </div>
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  {[
+                    { hours: 2, label: '2 小時 (預設)' },
+                    { hours: 2.5, label: '2.5 小時' },
+                    { hours: 3, label: '3 小時' },
+                    { hours: 4, label: '4 小時' },
+                  ].map(({ hours, label }) => {
+                    const currentDuration = calculateDurationHours(form.start_time, form.end_time);
+                    const isSelected = currentDuration === hours;
+                    return (
+                      <button
+                        key={hours}
+                        type="button"
+                        onClick={() =>
+                          setForm((prev) => ({
+                            ...prev,
+                            end_time: addHoursToDatetimeLocal(prev.start_time, hours),
+                          }))
+                        }
+                        className={`px-2.5 py-1 text-xs rounded-lg font-bold transition-all ${
+                          isSelected
+                            ? 'bg-blue-600 text-white shadow-sm scale-105'
+                            : 'bg-white text-slate-700 border border-slate-200 hover:bg-slate-100'
+                        }`}
+                      >
+                        {label}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* 場次時段預覽條 */}
+            {form.start_time && form.end_time && (
+              <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200/80 rounded-lg p-2.5 flex items-center justify-between text-xs text-blue-950">
+                <div className="flex items-center gap-2">
+                  <span className="text-base">🏸</span>
+                  <div>
+                    <div className="font-bold flex items-center gap-1.5 flex-wrap">
+                      <span>{formatDateSummary(form.start_time)}</span>
+                      <span className="bg-blue-600 text-white text-[11px] px-1.5 py-0.2 rounded font-medium">
+                        {getWeekdayString(form.start_time)}
+                      </span>
+                      <span>
+                        {formatTimeOnly(form.start_time)} ~ {formatTimeOnly(form.end_time)}
+                      </span>
+                    </div>
+                    <div className="text-[11px] text-blue-700 mt-0.5">
+                      時長：{calculateDurationHours(form.start_time, form.end_time) ?? 2} 小時
+                    </div>
+                  </div>
+                </div>
+                <span className="text-[10px] text-blue-600 font-semibold bg-white/90 border border-blue-200 px-2 py-0.5 rounded shadow-sm">
+                  選定開始自動填入+2h
+                </span>
+              </div>
+            )}
           </div>
 
           <div>
@@ -860,7 +1034,7 @@ function AdminDashboardContent() {
                   <div className="text-xs text-slate-500 space-y-1">
                     <div className="flex items-center gap-1.5">
                       <Clock size={13} />
-                      <span>{new Date(s.start_time).toLocaleString('zh-TW', { timeZone: 'Asia/Taipei' })}</span>
+                      <span>{new Date(s.start_time).toLocaleString('zh-TW', { timeZone: 'Asia/Taipei', year: 'numeric', month: 'numeric', day: 'numeric', weekday: 'short', hour: '2-digit', minute: '2-digit', hour12: false })}</span>
                     </div>
                     <div className="flex items-center gap-1.5">
                       <MapPin size={13} />
