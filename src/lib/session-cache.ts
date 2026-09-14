@@ -4,8 +4,9 @@
  * 功能特點：
  * 1. 預設 TTL 為 30 秒，可由環境變數 SESSION_CACHE_TTL_SECONDS 動態覆寫
  * 2. 支援事件驅動即時失效 (On-Demand Invalidation)：開團、報名、取消時立即清除，確保名額零時差
- * 3. 容錯降級 (Stale-While-Revalidate Fallback)：當 Supabase 發生 502/503 或網路抖動時，自動回傳舊快取平滑過渡
+ * 3. 容錯降級 (Stale-on-Error Fallback)：當 Supabase 發生 502/503 或網路抖動時，自動回傳舊快取平滑過渡 (上限 5 分鐘)
  * 4. 支援強制刷新 (Bypass Cache)：透過 ?refresh=true 或 Cache-Control: no-cache 繞過快取重查
+ * 5. 記憶體容量保護 (Max Size + LRU/過期淘汰)：上限 200 筆，避免惡意查詢造成記憶體膨脹
  */
 
 export interface CacheEntry<T> {
@@ -16,6 +17,12 @@ export interface CacheEntry<T> {
 
 // 預設快取時效：30 秒
 const DEFAULT_TTL_SECONDS = 30;
+
+// 快取容量上限 (防止惡意 Query 累積過多記憶體)
+const MAX_CACHE_ENTRIES = 200;
+
+// 容錯降級最大時間窗口 (最多允許 5 分鐘內的舊資料作 502 降級)
+const MAX_STALE_WINDOW_MS = 5 * 60 * 1000;
 
 /**
  * 取得快取 TTL 秒數 (優先讀取環境變數 SESSION_CACHE_TTL_SECONDS)
@@ -35,16 +42,16 @@ export function getCacheTTLSeconds(): number {
 const cacheStore = new Map<string, CacheEntry<unknown>>();
 
 /**
- * 產生標準化場次快取 Key
+ * 產生標準化場次快取 Key (含安全編碼與正規化)
  */
 export function generateSessionCacheKey(params: {
   groupId?: string | null;
   date?: string | null;
   status?: string | null;
 }): string {
-  const g = params.groupId?.trim() || 'all';
-  const d = params.date?.trim() || 'all';
-  const s = params.status?.trim() || 'all';
+  const g = encodeURIComponent((params.groupId || '').trim() || 'all');
+  const d = encodeURIComponent((params.date || '').trim() || 'all');
+  const s = encodeURIComponent((params.status || '').trim() || 'all');
   return `sessions:g=${g}:d=${d}:s=${s}`;
 }
 
@@ -85,9 +92,8 @@ export function getSessionCache<T>(key: string, allowStale = false): CacheLookup
     };
   }
 
-  // 資料已過期，但若允許過期降級且在合理容忍期 (15 分鐘內) 內
-  const maxStaleWindowMs = 15 * 60 * 1000;
-  if (allowStale && now - entry.expiresAt <= maxStaleWindowMs) {
+  // 資料已過期，但若允許過期降級且在合理容忍期 (5 分鐘內) 內
+  if (allowStale && now - entry.expiresAt <= MAX_STALE_WINDOW_MS) {
     return {
       hit: true,
       data: entry.data,
@@ -96,11 +102,13 @@ export function getSessionCache<T>(key: string, allowStale = false): CacheLookup
     };
   }
 
+  // 超過降級期，主動自 Map 清理
+  cacheStore.delete(key);
   return { hit: false, isStale: true, ageSeconds };
 }
 
 /**
- * 寫入快取
+ * 寫入快取 (含容量保護與自動淘汰)
  * @param key 快取鍵值
  * @param data 要儲存的資料
  * @param customTTL 可選自訂 TTL (秒)，未指定則依環境變數或預設值
@@ -110,6 +118,22 @@ export function setSessionCache<T>(key: string, data: T, customTTL?: number): vo
   if (ttlSeconds <= 0) return;
 
   const now = Date.now();
+
+  // 若快取項目超過上限，先清理已過期項目
+  if (cacheStore.size >= MAX_CACHE_ENTRIES) {
+    for (const [k, v] of cacheStore.entries()) {
+      if (now > v.expiresAt) {
+        cacheStore.delete(k);
+      }
+    }
+  }
+
+  // 若清理後仍超過上限，淘汰最舊插入的一筆
+  if (cacheStore.size >= MAX_CACHE_ENTRIES) {
+    const oldestKey = cacheStore.keys().next().value;
+    if (oldestKey) cacheStore.delete(oldestKey);
+  }
+
   cacheStore.set(key, {
     data,
     cachedAt: now,

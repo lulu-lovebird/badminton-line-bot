@@ -16,9 +16,10 @@ export const dynamic = 'force-dynamic';
 // 取得場次清單 (支援快取、群組場次與全域公開場次)
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
-  const date = searchParams.get('date');
-  const status = searchParams.get('status');
-  const groupId = searchParams.get('groupId');
+  // 1. 參數正規化 (去除多餘空白以防 Cache Key 碰撞)
+  const groupId = searchParams.get('groupId')?.trim() || null;
+  const date = searchParams.get('date')?.trim() || null;
+  const status = searchParams.get('status')?.trim() || null;
   const isRefresh =
     searchParams.get('refresh') === 'true' ||
     req.headers.get('cache-control')?.includes('no-cache');
@@ -26,7 +27,7 @@ export async function GET(req: NextRequest) {
   const cacheKey = generateSessionCacheKey({ groupId, date, status });
   const ttl = getCacheTTLSeconds();
 
-  // 1. 若非強制刷新，優先檢查記憶體快取 (命中時 0 次 Supabase 連線)
+  // 2. 若非強制刷新，優先檢查記憶體快取 (命中時 0 次 Supabase 連線)
   if (!isRefresh) {
     const cached = getSessionCache(cacheKey, false);
     if (cached.hit && cached.data) {
@@ -35,7 +36,8 @@ export async function GET(req: NextRequest) {
           'X-Cache': 'HIT',
           'X-Cache-Age': `${cached.ageSeconds}s`,
           'X-Cache-TTL': `${ttl}s`,
-          'Cache-Control': `public, max-age=${Math.min(ttl, 15)}, stale-while-revalidate=30`,
+          // 🛡️ 關鍵修正：對外標明 private, no-cache，快取完全由後端控制，確保 mutation 後即時生效不被瀏覽器/CDN 攔截
+          'Cache-Control': 'private, no-cache, no-store, must-revalidate',
         },
       });
     }
@@ -76,30 +78,74 @@ export async function GET(req: NextRequest) {
             'X-Cache': 'STALE-FALLBACK',
             'X-Cache-Age': `${stale.ageSeconds}s`,
             'X-Warning': 'Supabase temporary error, served from stale cache',
+            'Cache-Control': 'private, no-cache, no-store, must-revalidate',
           },
         });
       }
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
 
+    // 🛡️ 關鍵修正：空陣列亦正常寫入快取，防止查無場次時重複穿透打庫
     if (!sessions || sessions.length === 0) {
-      return NextResponse.json([]);
+      setSessionCache(cacheKey, []);
+      return NextResponse.json([], {
+        headers: {
+          'X-Cache': isRefresh ? 'BYPASS' : 'MISS',
+          'X-Cache-TTL': `${ttl}s`,
+          'Cache-Control': 'private, no-cache, no-store, must-revalidate',
+        },
+      });
     }
 
     // 取得所有報名資訊進行人數計算
     const sessionIds = sessions.map((s) => s.id);
-    const { data: regs } = await supabaseAdmin
+    const { data: regs, error: regsError } = await supabaseAdmin
       .from('registrations')
       .select('session_id, status, party_size')
       .in('session_id', sessionIds)
       .neq('status', 'cancelled');
 
+    // 🛡️ 關鍵修正：檢查 registrations 查詢錯誤，失敗時不可寫入假 0 人快取
+    if (regsError) {
+      console.error('查詢 registrations 錯誤:', regsError);
+      const stale = getSessionCache(cacheKey, true);
+      if (stale.hit && stale.data) {
+        return NextResponse.json(stale.data, {
+          headers: {
+            'X-Cache': 'STALE-FALLBACK',
+            'X-Cache-Age': `${stale.ageSeconds}s`,
+            'X-Warning': 'Registrations error, served from stale cache',
+            'Cache-Control': 'private, no-cache, no-store, must-revalidate',
+          },
+        });
+      }
+      return NextResponse.json({ error: regsError.message }, { status: 500 });
+    }
+
     // 取得所有團主使用者資料以附加姓名與頭像
     const hostUserIds = Array.from(new Set(sessions.map((s) => s.host_user_id).filter(Boolean)));
-    const { data: hostUsers } = await supabaseAdmin
+    const { data: hostUsers, error: usersError } = await supabaseAdmin
       .from('users')
       .select('line_user_id, display_name, picture_url')
       .in('line_user_id', hostUserIds);
+
+    // 🛡️ 關鍵修正：檢查 users 查詢錯誤
+    if (usersError) {
+      console.error('查詢 users 錯誤:', usersError);
+      const stale = getSessionCache(cacheKey, true);
+      if (stale.hit && stale.data) {
+        return NextResponse.json(stale.data, {
+          headers: {
+            'X-Cache': 'STALE-FALLBACK',
+            'X-Cache-Age': `${stale.ageSeconds}s`,
+            'X-Warning': 'Users error, served from stale cache',
+            'Cache-Control': 'private, no-cache, no-store, must-revalidate',
+          },
+        });
+      }
+      return NextResponse.json({ error: usersError.message }, { status: 500 });
+    }
+
     const hostMap = new Map((hostUsers || []).map((u) => [u.line_user_id, u]));
 
     // 檢查是否有舊的預設名稱 '團主' / '球友'，自動補齊真實 LINE 暱稱並回寫
@@ -150,7 +196,7 @@ export async function GET(req: NextRequest) {
       headers: {
         'X-Cache': isRefresh ? 'BYPASS' : 'MISS',
         'X-Cache-TTL': `${ttl}s`,
-        'Cache-Control': `public, max-age=${Math.min(ttl, 15)}, stale-while-revalidate=30`,
+        'Cache-Control': 'private, no-cache, no-store, must-revalidate',
       },
     });
   } catch (err: unknown) {
@@ -165,6 +211,7 @@ export async function GET(req: NextRequest) {
           'X-Cache': 'STALE-FALLBACK',
           'X-Cache-Age': `${stale.ageSeconds}s`,
           'X-Warning': 'Server exception, served from stale cache',
+          'Cache-Control': 'private, no-cache, no-store, must-revalidate',
         },
       });
     }
