@@ -127,6 +127,7 @@ flowchart LR
    npm run dev
    ```
 3. 推送至 GitHub 並關聯至 Vercel 進行自動 CI/CD 部署。
+4. 團隊協作與雙軌測試發布規範請參閱：[雙軌版控與發布作業指南 (RELEASE_GUIDE.md)](RELEASE_GUIDE.md)。
 
 ---
 
