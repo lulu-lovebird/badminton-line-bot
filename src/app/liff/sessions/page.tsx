@@ -17,6 +17,7 @@ interface RosterItem {
 
 function SessionListContent() {
   const searchParams = useSearchParams();
+  const targetSessionId = searchParams.get('sessionId') || '';
   const [currentGroupId, setCurrentGroupId] = useState<string>(searchParams.get('groupId') || '');
 
   const [sessions, setSessions] = useState<MatchSession[]>([]);
@@ -273,7 +274,11 @@ function SessionListContent() {
         </div>
       ) : (
         <div className="space-y-4">
-          {sessions.map((s) => {
+          {(targetSessionId
+            ? [...sessions].sort((a, b) => (a.id === targetSessionId ? -1 : b.id === targetSessionId ? 1 : 0))
+            : sessions
+          ).map((s) => {
+            const isTarget = s.id === targetSessionId;
             const isFull = (s.current_players || 0) >= s.max_players;
             const start = new Date(s.start_time);
             const end = new Date(s.end_time);
@@ -281,8 +286,18 @@ function SessionListContent() {
             return (
               <div
                 key={s.id}
-                className="bg-white rounded-2xl border border-slate-200 p-4 shadow-sm hover:shadow transition-all relative overflow-hidden"
+                className={`bg-white rounded-2xl border p-4 shadow-sm hover:shadow transition-all relative overflow-hidden ${
+                  isTarget
+                    ? 'border-2 border-emerald-500 ring-4 ring-emerald-100 shadow-md'
+                    : 'border-slate-200'
+                }`}
               >
+                {isTarget && (
+                  <div className="mb-2.5 -mt-1 -mx-1 bg-emerald-600 text-white text-[11px] font-bold px-2.5 py-1 rounded-lg flex items-center justify-between">
+                    <span>🎯 您正在查看由團主分享的指定場次</span>
+                    <span className="text-[10px] text-emerald-100">直接於下方報名</span>
+                  </div>
+                )}
                 <div className="flex items-center justify-between mb-2">
                   <div className="flex items-center gap-1.5 flex-wrap">
                     <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-slate-100 text-slate-700">

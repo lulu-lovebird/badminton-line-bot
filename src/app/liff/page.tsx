@@ -2,11 +2,12 @@
 
 import React, { Suspense, useEffect } from 'react';
 import Link from 'next/link';
-import { useSearchParams } from 'next/navigation';
+import { useSearchParams, useRouter } from 'next/navigation';
 import { Calendar, ClipboardList, Settings, Terminal, Shield, Sparkles, BookOpen } from 'lucide-react';
 import { useLiff } from '@/components/liff-provider';
 
 function LiffHubContent() {
+  const router = useRouter();
   const searchParams = useSearchParams();
   const groupId = searchParams?.get('groupId') || '';
   const groupQuery = groupId ? `?groupId=${encodeURIComponent(groupId)}` : '';
@@ -15,7 +16,15 @@ function LiffHubContent() {
 
   useEffect(() => {
     document.title = '羽球零打小幫手 JuJu 🏸';
-  }, []);
+    const action = searchParams?.get('action');
+    const sessionId = searchParams?.get('sessionId');
+    if (action === 'register' || sessionId) {
+      const q = new URLSearchParams();
+      if (sessionId) q.set('sessionId', sessionId);
+      if (groupId) q.set('groupId', groupId);
+      router.replace(`/liff/sessions?${q.toString()}`);
+    }
+  }, [searchParams, groupId, router]);
 
   return (
     <main className="min-h-screen bg-slate-50 p-6 flex flex-col items-center justify-center max-w-md mx-auto text-center pb-24">

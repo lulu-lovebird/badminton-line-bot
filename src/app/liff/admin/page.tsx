@@ -6,6 +6,7 @@ import { useSearchParams } from 'next/navigation';
 import { PlusCircle, Users, CheckCircle, Clock, Calendar, MapPin, Send, AlertCircle, RefreshCw, ShieldAlert, Key, Copy, Shield, UserPlus, FileText, User, Share2, Pencil, X } from 'lucide-react';
 import { MatchSession, Registration } from '@/types/database';
 import { initLiff } from '@/lib/liff-client';
+import { getSessionLiffUrl, formatSessionAnnouncement, shareSessionViaTargetPicker } from '@/lib/share-utils';
 
 // 輔助函式：計算時間順延天數並輸出 datetime-local 格式 (YYYY-MM-DDTHH:mm) - 強制以台灣時區 Asia/Taipei 轉換
 function toDatetimeLocalString(dateStr: string | Date, addDays = 0): string {
@@ -176,6 +177,12 @@ function AdminDashboardContent() {
     notes: '含空調，請自備球拍與乾淨球鞋',
     is_roster_public: true,
   });
+
+  const [autoPushToGroup, setAutoPushToGroup] = useState(false);
+  const [liffInstance, setLiffInstance] = useState<any>(null);
+  const [shareModalSession, setShareModalSession] = useState<MatchSession | null>(null);
+  const [copyToast, setCopyToast] = useState<string | null>(null);
+  const [isSharingTarget, setIsSharingTarget] = useState(false);
 
   const [copyNotice, setCopyNotice] = useState<string | null>(null);
 
@@ -360,6 +367,7 @@ function AdminDashboardContent() {
       let lineProfile: { userId: string; displayName: string } | null = null;
 
       if (liff) {
+        setLiffInstance(liff);
         token = liff.getIDToken() || '';
         setIdToken(token);
         try {
@@ -604,7 +612,7 @@ function AdminDashboardContent() {
       return;
     }
     const groupName = availableGroups.find((g) => g.group_id === destGroup)?.group_name || '群組';
-    if (!window.confirm(`確定要將「${session.title}」的開團報名卡片推播發送至【${groupName}】嗎？`)) return;
+    if (!window.confirm(`確定要將「${session.title}」的開團報名卡片推播發送至【${groupName}】嗎？\n\n⚠️ 提醒：Bot 主動推播會消耗每月 200 則免費額度 (群組人數 × 1 則)。\n若要免耗額度，建議使用「分享 / 複製」功能由您親自發送。`)) return;
 
     setIsPushingCard(true);
     try {
@@ -648,16 +656,16 @@ function AdminDashboardContent() {
           ...form,
           host_user_id: userProfile?.line_user_id || 'host_admin_001',
           host_name: userProfile?.display_name,
-          notify_group_id: form.group_id || undefined,
+          notify_group_id: autoPushToGroup && form.group_id ? form.group_id : undefined,
         }),
       });
+      const data = await res.json();
       if (res.ok) {
-        alert('🎉 場次建立成功！已同步發送卡片！');
-        setActiveTab('sessions');
         fetchSessions(idToken, userProfile?.line_user_id);
+        setShareModalSession(data);
+        setCopyToast(null);
       } else {
-        const err = await res.json();
-        alert(err.error || '建立失敗');
+        alert(data.error || '建立失敗');
       }
     } catch (e) {
       console.error(e);
@@ -1226,11 +1234,27 @@ function AdminDashboardContent() {
             </div>
           </div>
 
+          {/* 群組推播設定 */}
+          <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl space-y-1.5">
+            <label className="flex items-center gap-2 text-xs font-semibold text-slate-700 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={autoPushToGroup}
+                onChange={(e) => setAutoPushToGroup(e.target.checked)}
+                className="rounded text-emerald-600 focus:ring-emerald-500"
+              />
+              <span>由 Bot 自動推播至群組（選用）</span>
+            </label>
+            <p className="text-[11px] text-slate-400 pl-5 leading-tight">
+              ⚠️ 注意：Bot 主動推播會消耗每月 200 則免費額度 (群組人數 × 1 則)。建議建立後使用「分享卡片」或「複製連結」自貼群組，完全免扣額度！
+            </p>
+          </div>
+
           <button
             type="submit"
             className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl shadow-md transition-all mt-2"
           >
-            建立場次並產生 LINE 卡片
+            建立零打場次並取得分享卡片
           </button>
         </form>
       )}
@@ -1377,14 +1401,27 @@ function AdminDashboardContent() {
                         type="button"
                         onClick={(e) => {
                           e.stopPropagation();
+                          setShareModalSession(s);
+                          setCopyToast(null);
+                        }}
+                        className="px-2.5 py-1 bg-blue-50 hover:bg-blue-100 text-blue-800 border border-blue-200 rounded-lg font-bold flex items-center gap-1 active:scale-95 transition-all text-xs"
+                        title="分享卡片或複製報名連結至群組 (0 額度消耗)"
+                      >
+                        <Share2 size={12} className="text-blue-600" />
+                        <span>分享 / 複製</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
                           handlePushCardToGroup(s);
                         }}
                         disabled={isPushingCard}
-                        className="px-2 py-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 rounded-lg font-medium flex items-center gap-1 active:scale-95 transition-all text-xs"
-                        title="發送或補發此場次的報名卡片至群組"
+                        className="px-2 py-1 bg-slate-50 hover:bg-slate-100 text-slate-700 border border-slate-200 rounded-lg font-medium flex items-center gap-1 active:scale-95 transition-all text-xs"
+                        title="透過 Bot 推播至群組 (消耗每月額度)"
                       >
-                        <Share2 size={12} className="text-emerald-600" />
-                        <span>推播卡片</span>
+                        <Send size={11} className="text-slate-500" />
+                        <span>Bot 推播</span>
                       </button>
                       {/* ✏️ 編輯場次按鈕 (限原始主揪團主或 Super Admin，且尚未開始之場次) */}
                       {canManageSession(s) && (
@@ -1489,15 +1526,29 @@ function AdminDashboardContent() {
                     : '目前尚未發送至任何群組'}
                 </div>
               </div>
-              <button
-                type="button"
-                disabled={isPushingCard}
-                onClick={() => handlePushCardToGroup(selectedSession)}
-                className="px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 text-emerald-800 rounded-lg text-xs font-bold flex items-center gap-1 active:scale-95 transition-all shadow-xs disabled:opacity-50"
-              >
-                <Send size={13} className="text-emerald-600" />
-                <span>{isPushingCard ? '推播中...' : '📢 立即推播/補發卡片'}</span>
-              </button>
+              <div className="flex items-center gap-1.5 shrink-0">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShareModalSession(selectedSession);
+                    setCopyToast(null);
+                  }}
+                  className="px-3 py-1.5 bg-blue-50 hover:bg-blue-100 border border-blue-300 text-blue-800 rounded-lg text-xs font-bold flex items-center gap-1 active:scale-95 transition-all shadow-xs"
+                >
+                  <Share2 size={13} className="text-blue-600" />
+                  <span>分享 / 複製 (免額度)</span>
+                </button>
+                <button
+                  type="button"
+                  disabled={isPushingCard}
+                  onClick={() => handlePushCardToGroup(selectedSession)}
+                  className="px-2 py-1.5 bg-slate-50 hover:bg-slate-100 border border-slate-200 text-slate-700 rounded-lg text-xs font-medium flex items-center gap-1 active:scale-95 transition-all shadow-xs disabled:opacity-50"
+                  title="透過 Bot 推播至群組 (消耗每月額度)"
+                >
+                  <Send size={12} className="text-slate-500" />
+                  <span>Bot 推播</span>
+                </button>
+              </div>
             </div>
 
             <div className="mt-3 pt-3 border-t border-slate-100">
@@ -1955,6 +2006,155 @@ function AdminDashboardContent() {
           </form>
         </div>
       </div>
+      )}
+
+      {/* 📤 場次分享與快速複製彈窗 (Share Modal) */}
+      {shareModalSession && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in">
+          <div className="bg-white rounded-3xl max-w-sm w-full p-5 shadow-2xl border border-slate-100 space-y-4 relative max-h-[90vh] overflow-y-auto">
+            <button
+              onClick={() => setShareModalSession(null)}
+              className="absolute top-4 right-4 p-1.5 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 transition-colors"
+            >
+              <X size={16} />
+            </button>
+
+            <div className="text-center pt-1">
+              <div className="w-12 h-12 rounded-2xl bg-emerald-100 text-emerald-700 flex items-center justify-center mx-auto mb-2 text-2xl shadow-inner">
+                🏸
+              </div>
+              <h3 className="font-black text-slate-800 text-lg">開團成功！分享至群組</h3>
+              <p className="text-xs text-slate-400 mt-0.5">
+                透過以下免額度方式分享，球友點擊即可立即報名
+              </p>
+            </div>
+
+            {/* 場次資訊摘要 */}
+            <div className="bg-slate-50 p-3 rounded-2xl border border-slate-200 text-xs space-y-1">
+              <div className="font-bold text-slate-800 text-sm truncate">
+                {shareModalSession.title}
+              </div>
+              <div className="text-slate-500 flex items-center gap-1.5">
+                <Clock size={12} className="text-slate-400 shrink-0" />
+                <span>
+                  {new Date(shareModalSession.start_time).toLocaleString('zh-TW', {
+                    timeZone: 'Asia/Taipei',
+                    month: 'numeric',
+                    day: 'numeric',
+                    weekday: 'short',
+                    hour: '2-digit',
+                    minute: '2-digit',
+                    hour12: false,
+                  })}
+                </span>
+              </div>
+              <div className="text-slate-500 flex items-center gap-1.5">
+                <MapPin size={12} className="text-slate-400 shrink-0" />
+                <span className="truncate">{shareModalSession.location}</span>
+              </div>
+            </div>
+
+            {/* 複製成功提示 */}
+            {copyToast && (
+              <div className="p-2.5 bg-emerald-100 text-emerald-800 border border-emerald-300 rounded-xl text-xs flex items-center gap-1.5 animate-in fade-in">
+                <CheckCircle size={15} className="shrink-0" />
+                <span>{copyToast}</span>
+              </div>
+            )}
+
+            {/* 3 大核心動作按鈕 */}
+            <div className="space-y-2 pt-1">
+              {/* 按鈕 1: 原生 LINE 卡片分享 */}
+              <button
+                type="button"
+                disabled={isSharingTarget}
+                onClick={async () => {
+                  setIsSharingTarget(true);
+                  const result = await shareSessionViaTargetPicker(liffInstance, shareModalSession);
+                  setIsSharingTarget(false);
+                  if (result.ok) {
+                    setCopyToast('🎉 卡片已送至群組！(0 Bot 額度消耗)');
+                    setTimeout(() => {
+                      setShareModalSession(null);
+                      setActiveTab('sessions');
+                    }, 2000);
+                  } else if (result.message && !result.message.includes('取消')) {
+                    alert(result.message);
+                  }
+                }}
+                className="w-full py-3 px-4 bg-emerald-600 hover:bg-emerald-700 active:scale-98 text-white font-bold rounded-2xl shadow-md flex items-center justify-between transition-all"
+              >
+                <div className="flex items-center gap-2.5 text-left">
+                  <div className="w-8 h-8 rounded-xl bg-white/20 flex items-center justify-center text-lg shrink-0">
+                    📲
+                  </div>
+                  <div>
+                    <div className="text-xs font-bold">分享 Flex 報名卡片</div>
+                    <div className="text-[10px] text-emerald-100">原生互動卡片 • 0 額度消耗</div>
+                  </div>
+                </div>
+                <span className="text-xs bg-white/20 px-2 py-0.5 rounded-md shrink-0">
+                  {isSharingTarget ? '開啟中...' : '傳送 →'}
+                </span>
+              </button>
+
+              {/* 按鈕 2: 複製報名連結 */}
+              <button
+                type="button"
+                onClick={() => {
+                  const url = getSessionLiffUrl(shareModalSession.id);
+                  navigator.clipboard.writeText(url);
+                  setCopyToast('✓ 已複製報名連結！可直接貼在 LINE 群組');
+                }}
+                className="w-full py-2.5 px-4 bg-white hover:bg-slate-50 active:scale-98 text-slate-700 font-bold rounded-2xl border border-slate-200 shadow-sm flex items-center justify-between transition-all"
+              >
+                <div className="flex items-center gap-2.5 text-left">
+                  <div className="w-8 h-8 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center shrink-0">
+                    <Copy size={16} />
+                  </div>
+                  <div>
+                    <div className="text-xs font-bold">複製報名連結 (URL)</div>
+                    <div className="text-[10px] text-slate-400">貼入群組會自帶網頁卡片預覽</div>
+                  </div>
+                </div>
+                <span className="text-xs text-blue-600 font-bold bg-blue-50 px-2 py-0.5 rounded-md shrink-0">複製</span>
+              </button>
+
+              {/* 按鈕 3: 複製開團文案 */}
+              <button
+                type="button"
+                onClick={() => {
+                  const text = formatSessionAnnouncement(shareModalSession);
+                  navigator.clipboard.writeText(text);
+                  setCopyToast('✓ 已複製完整揪團文案！至群組長按貼上即可');
+                }}
+                className="w-full py-2.5 px-4 bg-white hover:bg-slate-50 active:scale-98 text-slate-700 font-bold rounded-2xl border border-slate-200 shadow-sm flex items-center justify-between transition-all"
+              >
+                <div className="flex items-center gap-2.5 text-left">
+                  <div className="w-8 h-8 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center shrink-0">
+                    <FileText size={16} />
+                  </div>
+                  <div>
+                    <div className="text-xs font-bold">複製完整揪團排版文案</div>
+                    <div className="text-[10px] text-slate-400">時間、地點、費用與報名連結全包</div>
+                  </div>
+                </div>
+                <span className="text-xs text-amber-600 font-bold bg-amber-50 px-2 py-0.5 rounded-md shrink-0">複製</span>
+              </button>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => {
+                setShareModalSession(null);
+                setActiveTab('sessions');
+              }}
+              className="w-full py-2 text-center text-xs font-bold text-slate-400 hover:text-slate-600"
+            >
+              完成，返回場次列表
+            </button>
+          </div>
+        </div>
       )}
     </main>
   );
