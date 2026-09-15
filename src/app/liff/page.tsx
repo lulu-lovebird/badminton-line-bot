@@ -161,6 +161,14 @@ function LiffHubContent() {
           </Link>
         )}
       </div>
+
+      {/* 品牌與開源致謝標籤 */}
+      <div className="mt-8 text-center text-[11px] text-slate-400 space-y-0.5">
+        <div>羽球零打小幫手 JuJu 🏸</div>
+        <div className="text-[10px] text-slate-400">
+          Developed with ❤️ by <span className="font-semibold text-slate-500">Bean, Bird & Badminton Tech Consulting</span>
+        </div>
+      </div>
     </main>
   );
 }

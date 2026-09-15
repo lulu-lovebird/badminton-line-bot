@@ -127,3 +127,20 @@ flowchart LR
    npm run dev
    ```
 3. 推送至 GitHub 並關聯至 Vercel 進行自動 CI/CD 部署。
+
+---
+
+## 📄 版權與開源授權 (License & Attribution)
+
+本專案由 **Bean, Bird & Badminton Tech Consulting** 開發並擁有版權。  
+基於推廣羽球運動與開放共享之初衷，本專案依 **[MIT License](LICENSE)** 開源釋出。
+
+```text
+Copyright (c) 2026 Bean, Bird & Badminton Tech Consulting
+```
+
+### 🏸 開源精神與社群倡議
+* **自由使用與部署**：任何羽球同好、團主或社團幹部皆可完全免費下載、Fork、修改、架設與商用。
+* **保留原創版權**：在散佈、Fork 或進行二次開發時，請依 MIT 規範保留原始版權聲明與 [LICENSE](LICENSE) 檔案。
+* **原創品牌倡議**：歡迎在自架系統或介面中保留 `Developed with ❤️ by Bean, Bird & Badminton Tech Consulting` 標註，讓更多熱愛羽球的球友認識原創團隊！
+

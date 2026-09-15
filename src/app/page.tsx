@@ -69,7 +69,7 @@ export default function Home() {
       <footer className="border-t border-slate-200 bg-white py-8 px-6 text-xs text-slate-500 text-center">
         <div className="max-w-4xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-3">
           <div>
-            © {new Date().getFullYear()} 羽球零打小幫手 JuJu. All rights reserved.
+            © {new Date().getFullYear()} 羽球零打小幫手 JuJu • Developed with ❤️ by Bean, Bird & Badminton Tech Consulting.
           </div>
           <div className="flex items-center gap-4 font-medium flex-wrap justify-center">
             <Link href="/host-guide" className="hover:text-emerald-600 transition-colors font-semibold text-emerald-700">團主使用手冊 (Host Guide)</Link>
