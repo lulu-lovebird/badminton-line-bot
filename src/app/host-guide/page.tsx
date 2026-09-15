@@ -17,6 +17,8 @@ import {
   Layers,
   Award,
   Sparkles,
+  Ban,
+  Trash2,
 } from 'lucide-react';
 import type { Metadata } from 'next';
 
@@ -81,7 +83,7 @@ export default function HostGuidePage() {
             <Layers size={18} className="text-emerald-600" />
             <span>手冊章節快速導覽</span>
           </div>
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 text-xs sm:text-sm">
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5 text-xs sm:text-sm">
             <a
               href="#step1"
               className="p-3 rounded-2xl bg-slate-50 hover:bg-emerald-50 text-slate-700 hover:text-emerald-800 border border-slate-200/80 transition-colors font-semibold flex items-center justify-between"
@@ -132,10 +134,17 @@ export default function HostGuidePage() {
               <ChevronRight size={14} className="text-slate-400 shrink-0" />
             </a>
             <a
+              href="#step8"
+              className="p-3 rounded-2xl bg-slate-50 hover:bg-emerald-50 text-slate-700 hover:text-emerald-800 border border-slate-200/80 transition-colors font-semibold flex items-center justify-between"
+            >
+              <span>8. 場次停用與刪除</span>
+              <ChevronRight size={14} className="text-slate-400 shrink-0" />
+            </a>
+            <a
               href="#faq"
               className="p-3 rounded-2xl bg-slate-50 hover:bg-emerald-50 text-slate-700 hover:text-emerald-800 border border-slate-200/80 transition-colors font-semibold flex items-center justify-between"
             >
-              <span>8. 常見問題 FAQ</span>
+              <span>9. 常見問題 FAQ</span>
               <ChevronRight size={14} className="text-slate-400 shrink-0" />
             </a>
           </div>
@@ -465,7 +474,75 @@ export default function HostGuidePage() {
           </div>
         </section>
 
-        {/* ===================== 第八章：常見問題 ===================== */}
+        {/* ===================== 第八章：場次維護 ===================== */}
+        <section id="step8" className="bg-white rounded-3xl p-6 sm:p-10 border border-slate-200 shadow-xs space-y-5">
+          <div className="flex items-center gap-3.5 border-b border-slate-100 pb-4">
+            <div className="w-10 h-10 sm:w-11 sm:h-11 rounded-2xl bg-rose-100 text-rose-900 font-black flex items-center justify-center text-base sm:text-lg shrink-0">
+              8
+            </div>
+            <div>
+              <h2 className="text-lg sm:text-2xl font-black text-slate-900">第八步：場次維護（停用、重新啟用與永久刪除）</h2>
+              <p className="text-xs sm:text-sm text-slate-500 mt-0.5">彈性應對突發變卦、清理測試資料與釋出雲端資源</p>
+            </div>
+          </div>
+
+          <div className="space-y-5 text-sm sm:text-base text-slate-700 leading-relaxed">
+            <p>
+              在日常揪團營運中，可能因突發天候、場館保養、團主私人事由或當初測試開團，需要暫停開放報名或將場次作廢清理。JuJu 在場次管理詳情頁頂部提供了「<strong>🚫 停用場次</strong>」與「<strong>🗑️ 刪除場次</strong>」兩種不同層級的處置功能：
+            </p>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs sm:text-sm">
+              {/* 停用功能卡片 */}
+              <div className="p-5 bg-amber-50/70 rounded-2xl border border-amber-200 space-y-3">
+                <div className="flex items-center gap-2 font-bold text-amber-900 text-sm sm:text-base">
+                  <Ban size={18} className="text-amber-600 shrink-0" />
+                  <span>🚫 停用場次（暫停報名，名冊保留）</span>
+                </div>
+                <p className="text-slate-600 leading-relaxed">
+                  若遇颱風天停打、場地整修，或團主希望暫停收人但<strong>保留既有名冊</strong>時，請點擊「<strong>停用場次</strong>」：
+                </p>
+                <ul className="list-disc pl-5 space-y-1.5 text-slate-700 leading-relaxed">
+                  <li><strong>球友前端警示</strong>：該場次卡片會即時標示紅色的「<span className="text-red-600 font-bold">🚫 場次已停用</span>」，報名按鈕轉為灰底禁用，防止球友繼續報名。</li>
+                  <li><strong>群組查詢隱藏</strong>：群組球友輸入「零打」時，機器人會自動過濾略過停用的場次。</li>
+                  <li><strong>名單完整安全</strong>：已報名之正取與備取球友資料 100% 完整保留，仍可供現場點名對帳。</li>
+                  <li><strong>隨時可恢復</strong>：狀況排除後，點擊「<span className="text-emerald-700 font-bold">✅ 重新啟用</span>」即可一秒恢復對外招募！</li>
+                </ul>
+              </div>
+
+              {/* 刪除功能卡片 */}
+              <div className="p-5 bg-rose-50/70 rounded-2xl border border-rose-200 space-y-3">
+                <div className="flex items-center gap-2 font-bold text-rose-900 text-sm sm:text-base">
+                  <Trash2 size={18} className="text-rose-600 shrink-0" />
+                  <span>🗑️ 永久刪除場次（原子級清除）</span>
+                </div>
+                <p className="text-slate-600 leading-relaxed">
+                  若先前為測試功能開的測試場次，或確認徹底取消作廢的團，可點擊「<strong>刪除場次</strong>」：
+                </p>
+                <ul className="list-disc pl-5 space-y-1.5 text-slate-700 leading-relaxed">
+                  <li><strong>二次防呆確認</strong>：點擊後系統會彈出確認視窗，避免手滑誤觸。</li>
+                  <li><strong>級聯連帶清理</strong>：系統自資料庫將該場次及<strong>其下所有球友報名與候補記錄全部清除</strong>，立即釋放資料庫空間。</li>
+                  <li><strong>嚴密權限保護</strong>：僅有該場次的「原始開團團主本人」或「最高管理員 (Super Admin)」才有權限刪除。</li>
+                  <li><strong>歷史場次支援</strong>：打完結束的歷史過期場次，團主亦可在後台隨時手動點擊刪除。</li>
+                </ul>
+              </div>
+            </div>
+
+            {/* 自動過期清理機制說明 */}
+            <div className="p-4 sm:p-5 bg-slate-50 rounded-2xl border border-slate-200 text-xs sm:text-sm text-slate-700 space-y-2">
+              <div className="font-bold flex items-center gap-2 text-slate-900 text-sm sm:text-base">
+                <Sparkles size={18} className="text-emerald-600" />
+                <span>🧹 系統貼心設計：過期歷史場次自動清理機制</span>
+              </div>
+              <p className="text-slate-600 leading-relaxed">
+                為免資料庫隨時間累積過期舊資料而佔用免費儲存空間，JuJu 後台內建了背景非同步自動清理機制：
+                系統預設會在場次結束 <strong>7 天後</strong>，自動從資料庫釋放清除該場次與其報名名單（團主完全無須逐週手動整理刪除）。
+                此天數亦可由超級管理員透過環境變數 <code className="bg-slate-200 text-slate-800 px-1 py-0.5 rounded font-mono text-xs">EXPIRED_SESSION_CLEANUP_DAYS</code> 彈性設定或設為 0 關閉。
+              </p>
+            </div>
+          </div>
+        </section>
+
+        {/* ===================== 第九章：常見問題 ===================== */}
         <section id="faq" className="bg-white rounded-3xl p-6 sm:p-10 border border-slate-200 shadow-xs space-y-5">
           <div className="flex items-center gap-3.5 border-b border-slate-100 pb-4">
             <div className="w-10 h-10 sm:w-11 sm:h-11 rounded-2xl bg-slate-100 text-slate-800 font-black flex items-center justify-center text-base sm:text-lg shrink-0">
@@ -503,6 +580,20 @@ export default function HostGuidePage() {
               <div className="font-bold text-slate-900 text-sm sm:text-base">Q4：同一個群組內可以有多個團主開團嗎？</div>
               <p className="text-slate-600 text-xs sm:text-sm leading-relaxed">
                 可以！社團內可有多位經審核通過的團主各自開團。每張場次卡片均會清楚標示「👤 主揪團主：[LINE暱稱]」，球友報名時一目了然。
+              </p>
+            </div>
+
+            <div className="p-4 sm:p-5 bg-slate-50 rounded-2xl border border-slate-200 space-y-1.5">
+              <div className="font-bold text-slate-900 text-sm sm:text-base">Q5：如果某週臨時停打，我該選擇「停用場次」還是「刪除場次」？</div>
+              <p className="text-slate-600 text-xs sm:text-sm leading-relaxed">
+                強烈建議選擇「<strong>停用場次</strong>」！先透過第七步的「緊急通知」發送私訊告知已報名的球友停打說明，接著在場次詳情頁點選「停用場次」。這樣既有的報名名冊能完整留存供日後查詢對帳，同時球友端亦無法再新增報名。唯有在該場次為「測試開團」或「徹底建立錯誤」時，才建議使用「刪除場次」。
+              </p>
+            </div>
+
+            <div className="p-4 sm:p-5 bg-slate-50 rounded-2xl border border-slate-200 space-y-1.5">
+              <div className="font-bold text-slate-900 text-sm sm:text-base">Q6：點擊「刪除場次」後，球友的報名資料還能救回嗎？</div>
+              <p className="text-slate-600 text-xs sm:text-sm leading-relaxed">
+                無法復原！「刪除場次」屬於資料庫的物理級聯清除（Hard Delete），會連同該場次的所有報名記錄、候補順位與收款註記徹底抹除。因此點擊時系統會跳出確認警告彈窗，請確認確實無需保留後再執行。
               </p>
             </div>
           </div>
