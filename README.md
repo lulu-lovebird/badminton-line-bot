@@ -50,22 +50,22 @@ LINE 官方帳號免費方案（Free Plan）每個月僅提供 **200 則主動�
 
 ```mermaid
 flowchart TD
-    Host([團主建立場次]) --> Decision{發布至群組的方式}
+    Host(["團主建立場次"]) --> Decision{"發布至群組的方式"}
     
-    Decision -->|方案 A: 個人名義發送| SharePicker[📲 LIFF Share Target Picker]
-    SharePicker --> HostSends[以團主個人身份發送 Flex 卡片<br><b>0 額度消耗 • 原生互動按鈕</b>]
+    Decision -->|"方案 A: 個人名義發送"| SharePicker["📲 LIFF Share Target Picker"]
+    SharePicker --> HostSends["以團主個人身份發送 Flex 卡片<br>0 額度消耗 • 原生互動按鈕"]
     
-    Decision -->|方案 B: 快速複製連結| CopyUrl[📋 複製專屬報名連結]
-    CopyUrl --> PasteUrl[團主貼到群組自帶網頁預覽<br><b>0 額度消耗</b>]
+    Decision -->|"方案 B: 快速複製連結"| CopyUrl["📋 複製專屬報名連結"]
+    CopyUrl --> PasteUrl["團主貼到群組自帶網頁預覽<br>0 額度消耗"]
     
-    Decision -->|方案 C: 複製揪團文案| CopyText[📝 複製完整排版文案]
-    CopyText --> PasteText[全套時間地點文案長按貼上<br><b>0 額度消耗</b>]
+    Decision -->|"方案 C: 複製揪團文案"| CopyText["📝 複製完整排版文案"]
+    CopyText --> PasteText["全套時間地點文案長按貼上<br>0 額度消耗"]
     
-    Decision -->|方案 D: 群友關鍵字| Keyword[群友輸入「零打」]
-    Keyword --> ReplyToken[Bot 透過 replyToken 回覆<br><b>100% 免費 • 無上限</b>]
+    Decision -->|"方案 D: 群友關鍵字"| Keyword["群友輸入「零打」"]
+    Keyword --> ReplyToken["Bot 透過 replyToken 回覆<br>100% 免費 • 無上限"]
     
-    Decision -.->|傳統模式: 官方 Bot 廣播| BotPush[⚠️ 官方帳號 pushMessage]
-    BotPush -.-> Consume[消耗群組人數 × 1 則額度<br>極易超標導致停止服務]
+    Decision -.->|"傳統模式: 官方 Bot 廣播"| BotPush["⚠️ 官方帳號 pushMessage"]
+    BotPush -.-> Consume["消耗群組人數 × 1 則額度<br>極易超標導致停止服務"]
 ```
 
 ### 1. 📲 LIFF Share Target Picker（社群分享卡片）

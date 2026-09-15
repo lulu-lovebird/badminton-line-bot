@@ -25,32 +25,32 @@
 
 ```mermaid
 flowchart TD
-    subgraph Development [1. 日常開發階段]
-        Local[本地開發 .env.local<br>指向 Beta 資源] -->|切換分支| Feat[feature/新功能分支]
-        Feat -->|發起 Pull Request| PR_Beta[PR: feature/* ➔ beta]
+    subgraph Development["1. 日常開發階段"]
+        Local["本地開發 .env.local<br>指向 Beta 資源"] -->|切換分支| Feat["feature/新功能分支"]
+        Feat -->|發起 Pull Request| PR_Beta["PR: feature/* ➔ beta"]
     end
 
-    subgraph Beta_Staging [2. Beta 整合與手機真機驗收]
-        PR_Beta -->|審查通過 Merge| Vercel_Beta[Vercel 自動建置部署<br>badminton-line-bot-beta.vercel.app]
-        Vercel_Beta <--> Supa_Beta[(Supabase Beta 測試庫)]
-        Vercel_Beta <--> Line_Beta[LINE Bot 測試機<br>@JuJu-Beta]
-        Line_Beta <--> Test_Group[📱 羽球內部測試群<br>實機跑通 開團/報名/遞補/對帳]
+    subgraph Beta_Staging["2. Beta 整合與手機真機驗收"]
+        PR_Beta -->|審查通過 Merge| Vercel_Beta["Vercel 自動建置部署<br>badminton-line-bot-beta.vercel.app"]
+        Vercel_Beta <--> Supa_Beta[("Supabase Beta 測試庫")]
+        Vercel_Beta <--> Line_Beta["LINE Bot 測試機 @JuJu-Beta"]
+        Line_Beta <--> Test_Group["📱 羽球內部測試群<br>實機跑通 開團/報名/遞補/對帳"]
     end
 
-    subgraph Production_Release [3. 正式上線發布階段]
-        Test_Group -->|驗收通過| PR_Prod[PR: beta ➔ main (發布候選)]
-        PR_Prod -->|① 向後相容 DDL| Supa_Prod[(Supabase Prod 正式庫)]
-        PR_Prod -->|② Merge PR| Vercel_Prod[Vercel 正式機自動部署<br>badminton-line-bot.vercel.app]
+    subgraph Production_Release["3. 正式上線發布階段"]
+        Test_Group -->|驗收通過| PR_Prod["PR: beta ➔ main (發布候選)"]
+        PR_Prod -->|1. 向後相容 DDL| Supa_Prod[("Supabase Prod 正式庫")]
+        PR_Prod -->|2. Merge PR| Vercel_Prod["Vercel 正式機自動部署<br>badminton-line-bot.vercel.app"]
         Vercel_Prod <--> Supa_Prod
-        Vercel_Prod <--> Line_Prod[LINE Bot 正式機<br>@JuJu-Official]
-        Line_Prod <--> Real_Groups[各羽球社團真實球友群]
-        Vercel_Prod -->|③ 打版本標籤| Git_Tag[Git Tag: v1.x.x]
+        Vercel_Prod <--> Line_Prod["LINE Bot 正式機 @JuJu-Official"]
+        Line_Prod <--> Real_Groups["各羽球社團真實球友群"]
+        Vercel_Prod -->|3. 打版本標籤| Git_Tag["Git Tag: v1.x.x"]
     end
 
-    subgraph Hotfix_Track [4. 線上緊急熱修復]
-        Bug[線上緊急事故] --> Hotfix[hotfix/修復分支]
-        Hotfix -->|直接修復 main| PR_Hotfix[PR: hotfix ➔ main]
-        PR_Hotfix -->|關鍵步驟: 同步回灌| Sync_Beta[git merge main 回灌至 beta]
+    subgraph Hotfix_Track["4. 線上緊急熱修復"]
+        Bug["線上緊急事故"] --> Hotfix["hotfix/修復分支"]
+        Hotfix -->|直接修復 main| PR_Hotfix["PR: hotfix ➔ main"]
+        PR_Hotfix -->|關鍵步驟: 同步回灌| Sync_Beta["git merge main 回灌至 beta"]
     end
 ```
 
