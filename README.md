@@ -1,7 +1,9 @@
 # 🏸 羽球零打報名 LINE 機器人 (Badminton LINE Bot)
 
 這是一個專為 LINE 羽球零打社團群組設計的自動化報名與管理系統。
-採用 **Next.js (App Router) + Supabase (PostgreSQL) + LINE Messaging API / LIFF** 開發，可免費部署在 **Vercel** 與 **Supabase Free Tier**。
+採用 **Next.js (App Router) + Supabase (PostgreSQL) + LINE Messaging API / LIFF** 開發，完全支援 **Vercel** 與 **Supabase Free Tier** 免費運行。
+
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Flulu-lovebird%2Fbadminton-line-bot&env=SUPER_ADMIN_LINE_IDS,LINE_CHANNEL_ID,LINE_CHANNEL_SECRET,LINE_CHANNEL_ACCESS_TOKEN,LINE_LIFF_ID,LINE_LIFF_URL,SUPABASE_URL,SUPABASE_ANON_KEY,SUPABASE_SERVICE_ROLE_KEY&envDescription=%E8%AB%8B%E4%BE%9D%E7%85%A7%E9%83%A8%E7%BD%B2%E6%8C%87%E5%8D%97%E5%A1%AB%E5%85%A5%E6%82%A8%E7%9A%84LINE%E8%88%87Supabase%E9%80%A3%E7%B7%9A%E9%87%91%E9%91%B0&envLink=https%3A%2F%2Fgithub.com%2Flulu-lovebird%2Fbadminton-line-bot%2Fblob%2Fmain%2FDEPLOYMENT_GUIDE.md&project-name=badminton-line-bot&repository-name=badminton-line-bot)
 
 ---
 
@@ -86,35 +88,42 @@ flowchart TD
 
 ---
 
-## 🚀 快速上手與部署步驟
+## 🚀 部署上線方式 (Deployment)
 
-### 步驟 1: 設定 Supabase 資料庫
-1. 前往 [Supabase](https://supabase.com) 註冊並建立免費專案。
-2. 進入專案的 **SQL Editor**。
-3. 複製專案內 [`supabase/schema.sql`](supabase/schema.sql) 的全部內容並執行，即可建立所有資料表與索引。
-4. 到 **Project Settings** -> **API** 取得：
-   - `Project URL` (`SUPABASE_URL`)
-   - `anon public` key (`SUPABASE_ANON_KEY`)
-   - `service_role secret` key (`SUPABASE_SERVICE_ROLE_KEY`)
+本專案支援 **兩大部署模式**：
 
-### 步驟 2: 設定 LINE Developers Console
-1. 建立一個 **Messaging API** Channel：
-   - 取得 `Channel ID`、`Channel Secret` 與 `Channel Access Token`。
-   - 將 Webhook URL 設定為：`https://你的域名/api/webhook`，並開啟 **Use Webhook**。
-2. 建立一個 **LIFF App**：
-   - Endpoint URL 設定為你的專案網址（例如：`https://你的域名/liff/sessions`）。
-   - Scope 勾選 `profile` 與 `openid`。
-   - **Share Target Picker**：設定為 **On**（⚠️ 必開！開啟後才能免額度使用社群分享器發送 Flex 卡片至群組）。
-   - 取得 `LIFF ID` (`LINE_LIFF_ID`)，對應的 `LINE_LIFF_URL` 為 `https://liff.line.me/<LIFF_ID>`。
+### 模式 A：【免寫程式】網友 / 團主直接一鍵獨立部署（最推薦 ⭐⭐⭐⭐⭐）
+**您完全不需要下載原始碼或安裝 Node.js**，直接以本 GitHub 倉庫為基礎，即可建立您專屬的獨立羽球零打小幫手：
 
-### 步驟 3: 本地開發環境變數設定
-複製 `.env.example` 為 `.env.local` 並填入對應金鑰（詳見 [DEPLOYMENT_GUIDE.md](DEPLOYMENT_GUIDE.md)）：
-```bash
-cp .env.example .env.local
+```mermaid
+flowchart LR
+    A["1. 取得金鑰<br>• Supabase (DB)<br>• LINE (Bot & LIFF)"] --> B["2. 一鍵複製與部署<br>點擊 Deploy with Vercel<br>填入環境變數"]
+    B --> C["3. 回填網址<br>• Webhook URL<br>• LIFF Endpoint"]
+    C --> D["🎉 立即上線！<br>邀請進羽球群組使用"]
 ```
 
-### 步驟 4: 部署至 Vercel
-1. 將專案推送到 GitHub。
-2. 在 [Vercel](https://vercel.com) 匯入該 GitHub Repo。
-3. 在 Vercel 專案設定的 **Environment Variables** 填入 `.env.example` 內列出之環境變數（包括 `SUPABASE_URL`、`LINE_LIFF_ID`、`LINE_CHANNEL_ACCESS_TOKEN` 等）。
-4. 點擊 **Deploy** 完成部署！完整圖文教學請參閱 [DEPLOYMENT_GUIDE.md](DEPLOYMENT_GUIDE.md)。
+1. **準備免費資料庫與 LINE 憑證**：
+   - 依照 [DEPLOYMENT_GUIDE.md](DEPLOYMENT_GUIDE.md) 免費註冊 **Supabase**，並在 SQL Editor 貼上執行 [`supabase/schema.sql`](supabase/schema.sql)。
+   - 依照指南在 **LINE Developers Console** 免費建立 Messaging API 頻道與 LIFF App。
+2. **點擊一鍵部署按鈕**：
+   - 點擊上方的 **「Deploy with Vercel」** 按鈕，Vercel 會自動複製本專案至您的 GitHub，並引導填寫環境變數。
+3. **回填 Webhook 與 LIFF 網址**：
+   - 部署完成後，將 Vercel 發放的正式網址回填至 LINE 後台即刻啟用！
+
+👉 **完整詳細圖文說明請見**：[完整部署操作指南 (DEPLOYMENT_GUIDE.md)](DEPLOYMENT_GUIDE.md)
+
+---
+
+### 模式 B：【開發者】本地開發與自訂修改
+如果您是工程師，希望自行修改功能、樣式或擴充邏輯：
+1. Fork 本倉庫到您的 GitHub 帳號。
+2. Clone 到本地環境：
+   ```bash
+   git clone https://github.com/您的GitHub帳號/badminton-line-bot.git
+   cd badminton-line-bot
+   npm install
+   cp .env.example .env.local
+   # 填入金鑰後啟動本地伺服器
+   npm run dev
+   ```
+3. 推送至 GitHub 並關聯至 Vercel 進行自動 CI/CD 部署。
