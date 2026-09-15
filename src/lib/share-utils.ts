@@ -29,7 +29,7 @@ export function formatTaipeiDate(dateString: string) {
  * 取得報名頁面專屬 LIFF 連結
  */
 export function getSessionLiffUrl(sessionId: string, liffBaseUrl?: string): string {
-  const base = liffBaseUrl || process.env.NEXT_PUBLIC_LIFF_URL || 'https://liff.line.me/2011571193-7TCyhgGU';
+  const base = liffBaseUrl || process.env.LINE_LIFF_URL || process.env.NEXT_PUBLIC_LIFF_URL || 'https://liff.line.me/2011571193-7TCyhgGU';
   const cleanBase = base.replace(/\/$/, '');
   return `${cleanBase}/sessions?sessionId=${sessionId}`;
 }

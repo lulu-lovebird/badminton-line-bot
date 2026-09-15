@@ -65,7 +65,7 @@
 
 專案內已準備好自動建立腳本 [`scripts/create-richmenu.ts`](scripts/create-richmenu.ts)。
 
-當您在 `.env.local` 填好 `LINE_CHANNEL_ACCESS_TOKEN` 與 `NEXT_PUBLIC_LIFF_URL` 後，只需在終端機執行：
+當您在 `.env.local` 填好 `LINE_CHANNEL_ACCESS_TOKEN` 與 `LINE_LIFF_URL` (或 `NEXT_PUBLIC_LIFF_URL`) 後，只需在終端機執行：
 
 ```bash
 npx tsx scripts/create-richmenu.ts

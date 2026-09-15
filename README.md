@@ -93,22 +93,22 @@ flowchart TD
 2. 進入專案的 **SQL Editor**。
 3. 複製專案內 [`supabase/schema.sql`](supabase/schema.sql) 的全部內容並執行，即可建立所有資料表與索引。
 4. 到 **Project Settings** -> **API** 取得：
-   - `Project URL` (`NEXT_PUBLIC_SUPABASE_URL`)
-   - `anon public` key (`NEXT_PUBLIC_SUPABASE_ANON_KEY`)
+   - `Project URL` (`SUPABASE_URL`)
+   - `anon public` key (`SUPABASE_ANON_KEY`)
    - `service_role secret` key (`SUPABASE_SERVICE_ROLE_KEY`)
 
 ### 步驟 2: 設定 LINE Developers Console
 1. 建立一個 **Messaging API** Channel：
-   - 取得 `Channel Secret` 與 `Channel Access Token`。
+   - 取得 `Channel ID`、`Channel Secret` 與 `Channel Access Token`。
    - 將 Webhook URL 設定為：`https://你的域名/api/webhook`，並開啟 **Use Webhook**。
 2. 建立一個 **LIFF App**：
    - Endpoint URL 設定為你的專案網址（例如：`https://你的域名/liff/sessions`）。
    - Scope 勾選 `profile` 與 `openid`。
    - **Share Target Picker**：設定為 **On**（⚠️ 必開！開啟後才能免額度使用社群分享器發送 Flex 卡片至群組）。
-   - 取得 `LIFF ID`。
+   - 取得 `LIFF ID` (`LINE_LIFF_ID`)，對應的 `LINE_LIFF_URL` 為 `https://liff.line.me/<LIFF_ID>`。
 
 ### 步驟 3: 本地開發環境變數設定
-複製 `.env.example` 為 `.env.local` 並填入對應金鑰：
+複製 `.env.example` 為 `.env.local` 並填入對應金鑰（詳見 [DEPLOYMENT_GUIDE.md](DEPLOYMENT_GUIDE.md)）：
 ```bash
 cp .env.example .env.local
 ```
@@ -116,5 +116,5 @@ cp .env.example .env.local
 ### 步驟 4: 部署至 Vercel
 1. 將專案推送到 GitHub。
 2. 在 [Vercel](https://vercel.com) 匯入該 GitHub Repo。
-3. 在 Vercel 專案設定的 **Environment Variables** 填入上述所有環境變數。
-4. 點擊 **Deploy** 完成部署！
+3. 在 Vercel 專案設定的 **Environment Variables** 填入 `.env.example` 內列出之環境變數（包括 `SUPABASE_URL`、`LINE_LIFF_ID`、`LINE_CHANNEL_ACCESS_TOKEN` 等）。
+4. 點擊 **Deploy** 完成部署！完整圖文教學請參閱 [DEPLOYMENT_GUIDE.md](DEPLOYMENT_GUIDE.md)。

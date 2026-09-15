@@ -5,7 +5,7 @@ import { messagingApi } from '@line/bot-sdk';
 const { MessagingApiClient, MessagingApiBlobClient } = messagingApi;
 
 const channelAccessToken = process.env.LINE_CHANNEL_ACCESS_TOKEN || '';
-const liffUrl = process.env.NEXT_PUBLIC_LIFF_URL || '';
+const liffUrl = process.env.LINE_LIFF_URL || process.env.NEXT_PUBLIC_LIFF_URL || '';
 
 if (!channelAccessToken) {
   console.error('❌ 請先在環境變數中設定 LINE_CHANNEL_ACCESS_TOKEN');
@@ -13,7 +13,7 @@ if (!channelAccessToken) {
 }
 
 if (!liffUrl) {
-  console.error('❌ 請先在環境變數中設定 NEXT_PUBLIC_LIFF_URL');
+  console.error('❌ 請先在環境變數中設定 LINE_LIFF_URL (或 NEXT_PUBLIC_LIFF_URL)');
   process.exit(1);
 }
 

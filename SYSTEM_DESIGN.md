@@ -260,7 +260,7 @@ erDiagram
 ### 步驟 1: Supabase 資料庫建置
 1. 前往 [Supabase](https://supabase.com) 建立免費專案。
 2. 進入 **SQL Editor**，複製專案中的 [`supabase/schema.sql`](supabase/schema.sql) 貼上並執行。
-3. 至 **Project Settings** -> **API** 複製 `Project URL`、`anon key` 與 `service_role key`。
+3. 至 **Project Settings** -> **API** 複製 `Project URL` (`SUPABASE_URL`)、`anon key` (`SUPABASE_ANON_KEY`) 與 `service_role key` (`SUPABASE_SERVICE_ROLE_KEY`)。
 
 ### 步驟 2: LINE 開發者後台設定
 1. **Messaging API**：
@@ -268,7 +268,9 @@ erDiagram
    - 將 Webhook URL 設定為：`https://你的域名/api/webhook` 並開啟 Webhook。
 2. **LIFF (LINE Front-end Framework)**：
    - 新增 LIFF App，Endpoint 設定為你的 Vercel 網址（例如：`https://你的域名/liff/sessions`）。
-   - Scope 勾選 `profile` 與 `openid`。取得 `LIFF ID`。
+   - Scope 勾選 `profile` 與 `openid`。
+   - **Share Target Picker** 設定為 `On`。
+   - 取得 `LIFF ID` (`LINE_LIFF_ID`)，對應網址為 `LINE_LIFF_URL`。
 
 ### 步驟 3: 環境變數設定 (`.env.local` / Vercel)
 ```bash
@@ -280,17 +282,21 @@ LINE_CHANNEL_ID=your_line_channel_id
 LINE_CHANNEL_SECRET=your_line_channel_secret
 LINE_CHANNEL_ACCESS_TOKEN=your_line_channel_access_token
 
-# LIFF 設定
-NEXT_PUBLIC_LIFF_ID=your_liff_id
-NEXT_PUBLIC_LIFF_URL=https://liff.line.me/your_liff_id
+# LIFF 設定 (透過 next.config.ts 安全映射至前端)
+LINE_LIFF_ID=your_liff_id
+LINE_LIFF_URL=https://liff.line.me/your_liff_id
 
 # Supabase 資料庫連線
-NEXT_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
-NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
+SUPABASE_URL=https://your-project.supabase.co
+SUPABASE_ANON_KEY=your_supabase_anon_key
 SUPABASE_SERVICE_ROLE_KEY=your_supabase_service_role_key
+
+# 系統除錯與快取 (選填)
+DEBUG=off
+SESSION_CACHE_TTL_SECONDS=30
 ```
 
 ### 步驟 4: 部署到 Vercel
 1. 將程式庫推送到 GitHub。
 2. 在 Vercel 匯入專案，填入上述環境變數。
-3. 點擊 **Deploy** 完成上線！
+3. 點擊 **Deploy** 完成上線！詳細操作請參考 [DEPLOYMENT_GUIDE.md](DEPLOYMENT_GUIDE.md)。

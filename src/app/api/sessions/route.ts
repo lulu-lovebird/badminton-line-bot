@@ -364,7 +364,7 @@ export async function POST(req: NextRequest) {
         host_picture_url: finalPictureUrl,
       };
 
-      const liffUrl = process.env.NEXT_PUBLIC_LIFF_URL || '';
+      const liffUrl = process.env.LINE_LIFF_URL || process.env.NEXT_PUBLIC_LIFF_URL || '';
       const flexMsg = createSessionFlexMessage(sessionWithHost, liffUrl);
       try {
         await lineClient.pushMessage({

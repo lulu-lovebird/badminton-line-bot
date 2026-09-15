@@ -28,8 +28,8 @@
 4. 取得 Supabase 連線金鑰：
    - 點擊左下角 **Project Settings (齒輪圖示)** -> **API**。
    - 複製並記錄以下三個值：
-     - `Project URL`（對應 `NEXT_PUBLIC_SUPABASE_URL`）
-     - `Project API keys` 中的 `anon public`（對應 `NEXT_PUBLIC_SUPABASE_ANON_KEY`）
+     - `Project URL`（對應 `SUPABASE_URL`）
+     - `Project API keys` 中的 `anon public`（對應 `SUPABASE_ANON_KEY`）
      - `Project API keys` 中的 `service_role secret`（對應 `SUPABASE_SERVICE_ROLE_KEY`，點 Reveal 複製）
 
 ---
@@ -67,8 +67,8 @@
    - **Bot link feature**：選擇 `On (Normal)`（讓球友開啟 LIFF 時順便加機器人好友）
    - **Share Target Picker**：設定為 **On**（⚠️ 極重要！開啟後團主才能免額度使用社群分享器送出 Flex 互動卡片）
    - 點擊 **Add** 建立完成。
-3. 複製並記錄生成的 **LIFF ID**（格式如 `1234567890-AbCdEfGh`，對應 `NEXT_PUBLIC_LIFF_ID`）。
-   - 對應的 `NEXT_PUBLIC_LIFF_URL` 即為 `https://liff.line.me/<你的LIFF_ID>`。
+3. 複製並記錄生成的 **LIFF ID**（格式如 `1234567890-AbCdEfGh`，對應 `LINE_LIFF_ID`）。
+   - 對應的 `LINE_LIFF_URL` 即為 `https://liff.line.me/<你的LIFF_ID>`。
 
 ---
 
@@ -110,17 +110,22 @@ git push -u origin main
 3. 在 Import Git Repository 列表中找到剛剛建立的 `badminton-line-bot`，點擊 **"Import"**。
 4. 在 **Environment Variables** 區塊，逐一貼入以下環境變數：
 
-| 變數名稱 (Key) | 說明 / 範例值 (Value) |
-| :--- | :--- |
-| `SUPER_ADMIN_LINE_IDS` | 您的 LINE User ID (步驟 3 取得) |
-| `LINE_CHANNEL_ID` | LINE Channel ID (步驟 2-A 取得) |
-| `LINE_CHANNEL_SECRET` | LINE Channel Secret (步驟 2-A 取得) |
-| `LINE_CHANNEL_ACCESS_TOKEN` | LINE Channel Access Token (步驟 2-A 取得) |
-| `NEXT_PUBLIC_LIFF_ID` | LIFF ID (步驟 2-B 取得) |
-| `NEXT_PUBLIC_LIFF_URL` | `https://liff.line.me/<你的LIFF_ID>` |
-| `NEXT_PUBLIC_SUPABASE_URL` | Supabase Project URL (步驟 1 取得) |
-| `NEXT_PUBLIC_SUPABASE_ANON_KEY`| Supabase anon public key (步驟 1 取得) |
-| `SUPABASE_SERVICE_ROLE_KEY` | Supabase service_role secret key (步驟 1 取得) |
+| 變數名稱 (Key) | 必填/選填 | 說明 / 範例值 (Value) |
+| :--- | :--- | :--- |
+| `SUPER_ADMIN_LINE_IDS` | **必填** | 您的 LINE User ID (步驟 3 取得，多個以逗號隔開) |
+| `LINE_CHANNEL_ID` | **必填** | LINE Messaging API Channel ID (步驟 2-A 取得) |
+| `LINE_CHANNEL_SECRET` | **必填** | LINE Messaging API Channel Secret (步驟 2-A 取得) |
+| `LINE_CHANNEL_ACCESS_TOKEN` | **必填** | LINE Messaging API Channel Access Token (步驟 2-A 取得) |
+| `LINE_LIFF_ID` | **必填** | LIFF ID (步驟 2-B 取得，例如 `1234567890-AbCdEfGh`) |
+| `LINE_LIFF_URL` | **必填** | `https://liff.line.me/<你的LIFF_ID>` |
+| `SUPABASE_URL` | **必填** | Supabase Project URL (步驟 1 取得) |
+| `SUPABASE_ANON_KEY` | **必填** | Supabase anon public key (步驟 1 取得) |
+| `SUPABASE_SERVICE_ROLE_KEY` | **必填** | Supabase service_role secret key (步驟 1 取得) |
+| `DEBUG` | 選填 | 設為 `on` 啟用 LIFF 除錯面板，預設為 `off` (關閉) |
+| `SESSION_CACHE_TTL_SECONDS` | 選填 | 零打場次記憶體快取秒數，預設為 `30` (設為 `0` 可停用) |
+
+> 💡 **環境變數前綴說明**：
+> 為避開 Vercel 對 `NEXT_` 前綴變數的命名限制，本專案建議一律採用上方乾淨的變數名稱（例如 `SUPABASE_URL`、`LINE_LIFF_ID`）。專案已透過 `next.config.ts` 自動映射至前端執行環境；同時系統底層亦 100% 向後相容帶有 `NEXT_PUBLIC_` 前綴的舊變數名稱。
 
 5. 點擊 **"Deploy"**！
 6. 等待約 1 分鐘，Vercel 就會部署成功，並發放一組正式的 HTTPS 域名（例如：`https://badminton-line-bot.vercel.app`）。
