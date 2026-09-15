@@ -169,7 +169,7 @@ function AdminDashboardContent() {
     location: '',
     court_info: '',
     max_players: 8,
-    max_waitlist: 4,
+    max_waitlist: 2,
     level_requirement: '初中級 (4~7級)',
     shuttlecock: '勝利比賽球 (綠標)',
     fee: 200,
@@ -193,7 +193,7 @@ function AdminDashboardContent() {
       location: s.location || '',
       court_info: s.court_info || '',
       max_players: s.max_players || 8,
-      max_waitlist: s.max_waitlist || 4,
+      max_waitlist: s.max_waitlist !== undefined ? s.max_waitlist : 2,
       level_requirement: s.level_requirement || '初中級 (4~7級)',
       shuttlecock: s.shuttlecock || '勝利比賽球 (綠標)',
       fee: s.fee || 200,
@@ -248,7 +248,7 @@ function AdminDashboardContent() {
     location: '',
     court_info: '',
     max_players: 8,
-    max_waitlist: 4,
+    max_waitlist: 2,
     level_requirement: '初中級 (4~7級)',
     shuttlecock: '勝利比賽球 (綠標)',
     fee: 200,
@@ -280,7 +280,7 @@ function AdminDashboardContent() {
       location: s.location || '',
       court_info: s.court_info || '',
       max_players: s.max_players || 8,
-      max_waitlist: s.max_waitlist || 4,
+      max_waitlist: s.max_waitlist !== undefined ? s.max_waitlist : 2,
       level_requirement: s.level_requirement || '初中級 (4~7級)',
       shuttlecock: s.shuttlecock || '勝利比賽球 (綠標)',
       fee: s.fee ?? 200,
@@ -1108,21 +1108,31 @@ function AdminDashboardContent() {
           <div className="grid grid-cols-2 gap-2">
             <div>
               <label className="text-xs font-semibold text-slate-600">正取上限人數</label>
-              <input
-                type="number"
+              <select
                 value={form.max_players}
                 onChange={(e) => setForm({ ...form, max_players: Number(e.target.value) })}
-                className="w-full text-xs border rounded-lg p-2.5 mt-1"
-              />
+                className="w-full text-xs border rounded-lg p-2.5 mt-1 bg-white outline-none focus:border-emerald-500"
+              >
+                {Array.from({ length: 31 }, (_, i) => i + 2).map((num) => (
+                  <option key={num} value={num}>
+                    {num} 人 {num === 8 ? '(預設)' : ''}
+                  </option>
+                ))}
+              </select>
             </div>
             <div>
               <label className="text-xs font-semibold text-slate-600">備取上限人數</label>
-              <input
-                type="number"
+              <select
                 value={form.max_waitlist}
                 onChange={(e) => setForm({ ...form, max_waitlist: Number(e.target.value) })}
-                className="w-full text-xs border rounded-lg p-2.5 mt-1"
-              />
+                className="w-full text-xs border rounded-lg p-2.5 mt-1 bg-white outline-none focus:border-emerald-500"
+              >
+                {Array.from({ length: 11 }, (_, i) => i).map((num) => (
+                  <option key={num} value={num}>
+                    {num === 0 ? '0 人 (不開放備取)' : `${num} 人 ${num === 2 ? '(預設)' : ''}`}
+                  </option>
+                ))}
+              </select>
             </div>
           </div>
 
@@ -1790,27 +1800,46 @@ function AdminDashboardContent() {
                       </span>
                     )}
                   </div>
-                  <input
-                    type="number"
-                    min={editForm.current_players || 1}
-                    required
+                  <select
                     value={editForm.max_players}
                     onChange={(e) => setEditForm({ ...editForm, max_players: Number(e.target.value) })}
-                    className="w-full text-xs border rounded-lg p-2.5 mt-1 outline-none focus:border-blue-500"
-                  />
-                  <p className="text-[10px] text-slate-400 mt-0.5">
-                    不可低於已正取 ({editForm.current_players}人)
-                  </p>
+                    className="w-full text-xs border rounded-lg p-2.5 mt-1 bg-white outline-none focus:border-blue-500"
+                  >
+                    {Array.from(
+                      { length: Math.max(32, editForm.max_players || 8, editForm.current_players || 0) - 1 },
+                      (_, i) => i + 2
+                    ).map((num) => (
+                      <option
+                        key={num}
+                        value={num}
+                        disabled={num < editForm.current_players}
+                      >
+                        {num} 人 {num < editForm.current_players ? '(低於已報人數)' : num === 8 ? '(推薦)' : ''}
+                      </option>
+                    ))}
+                  </select>
+                  {editForm.current_players > 0 && (
+                    <p className="text-[10px] text-slate-400 mt-0.5">
+                      不可低於已正取 ({editForm.current_players}人)
+                    </p>
+                  )}
                 </div>
                 <div>
                   <label className="text-xs font-semibold text-slate-700">備取上限人數</label>
-                  <input
-                    type="number"
-                    min={0}
+                  <select
                     value={editForm.max_waitlist}
                     onChange={(e) => setEditForm({ ...editForm, max_waitlist: Number(e.target.value) })}
-                    className="w-full text-xs border rounded-lg p-2.5 mt-1 outline-none focus:border-blue-500"
-                  />
+                    className="w-full text-xs border rounded-lg p-2.5 mt-1 bg-white outline-none focus:border-blue-500"
+                  >
+                    {Array.from(
+                      { length: Math.max(10, editForm.max_waitlist || 2) + 1 },
+                      (_, i) => i
+                    ).map((num) => (
+                      <option key={num} value={num}>
+                        {num === 0 ? '0 人 (不開放備取)' : `${num} 人 ${num === 2 ? '(預設)' : ''}`}
+                      </option>
+                    ))}
+                  </select>
                 </div>
               </div>
 

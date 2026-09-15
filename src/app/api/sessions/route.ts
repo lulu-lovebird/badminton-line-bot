@@ -322,8 +322,8 @@ export async function POST(req: NextRequest) {
       end_time: toTaipeiISOString(end_time),
       location,
       court_info,
-      max_players: Number(max_players) || 8,
-      max_waitlist: Number(max_waitlist) || 5,
+      max_players: max_players !== undefined && !isNaN(Number(max_players)) ? Math.max(1, Number(max_players)) : 8,
+      max_waitlist: max_waitlist !== undefined && !isNaN(Number(max_waitlist)) ? Math.max(0, Number(max_waitlist)) : 2,
       level_requirement,
       shuttlecock,
       fee: Number(fee) || 200,
@@ -501,7 +501,9 @@ export async function PATCH(req: NextRequest) {
     if (location !== undefined) updatePayload.location = location.trim();
     if (court_info !== undefined) updatePayload.court_info = court_info.trim();
     if (max_players !== undefined) updatePayload.max_players = newMaxPlayers;
-    if (max_waitlist !== undefined) updatePayload.max_waitlist = Number(max_waitlist) || 5;
+    if (max_waitlist !== undefined && !isNaN(Number(max_waitlist))) {
+      updatePayload.max_waitlist = Math.max(0, Number(max_waitlist));
+    }
     if (level_requirement !== undefined) updatePayload.level_requirement = level_requirement.trim();
     if (shuttlecock !== undefined) updatePayload.shuttlecock = shuttlecock.trim();
     if (fee !== undefined) updatePayload.fee = Number(fee) || 0;
