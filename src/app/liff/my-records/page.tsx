@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { Calendar, MapPin, AlertTriangle, XCircle, Clock, User } from 'lucide-react';
+import { Calendar, MapPin, AlertTriangle, XCircle, Clock, User, RefreshCw } from 'lucide-react';
 import { Registration } from '@/types/database';
 import { initLiff } from '@/lib/liff-client';
 
@@ -119,10 +119,15 @@ export default function MyRecordsPage() {
       )}
 
       {loading ? (
-        <div className="text-center py-12 text-slate-400 text-sm">載入紀錄中...</div>
+        <div className="text-center py-12 bg-white rounded-2xl border border-slate-200 text-xs space-y-2.5 p-6 shadow-sm">
+          <RefreshCw size={24} className="animate-spin text-emerald-600 mx-auto" />
+          <div className="text-sm font-bold text-slate-800">正在讀取資料中，請稍候...</div>
+          <div className="text-slate-400 text-[11px]">正在連線伺服器，即時同步您的個人報名紀錄</div>
+        </div>
       ) : records.length === 0 ? (
-        <div className="text-center py-12 bg-white rounded-xl border border-slate-200 text-slate-500 text-sm">
-          目前尚無任何報名紀錄
+        <div className="text-center py-12 bg-white rounded-2xl border border-slate-200 text-slate-500 text-sm shadow-sm space-y-1">
+          <div className="font-medium text-slate-700">目前尚無任何報名紀錄</div>
+          <p className="text-xs text-slate-400">您報名或登記備取的零打場次將會顯示在此處</p>
         </div>
       ) : (
         <div className="space-y-4">

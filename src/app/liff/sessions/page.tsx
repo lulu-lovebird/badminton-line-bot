@@ -240,20 +240,21 @@ function SessionListContent() {
 
       {/* 場次列表 */}
       {loading ? (
-        <div className="text-center py-16 text-slate-400 text-xs flex flex-col items-center gap-2">
-          <RefreshCw size={22} className="animate-spin text-emerald-500" />
-          <span>正在即時載入場次列表...</span>
+        <div className="text-center py-12 bg-white rounded-2xl border border-slate-200 text-xs space-y-2.5 p-6 shadow-sm">
+          <RefreshCw size={24} className="animate-spin text-emerald-600 mx-auto" />
+          <div className="text-sm font-bold text-slate-800">正在讀取資料中，請稍候...</div>
+          <div className="text-slate-400 text-[11px]">正在連線伺服器，即時同步最新開團與報名名單</div>
         </div>
       ) : sessions.length === 0 ? (
-        <div className="text-center py-12 px-4 bg-white rounded-2xl border border-slate-200 text-slate-500 space-y-3">
-          <div className="text-sm font-medium">目前暫無開放中的零打場次</div>
+        <div className="text-center py-12 px-4 bg-white rounded-2xl border border-slate-200 text-slate-500 space-y-3 shadow-sm">
+          <div className="text-sm font-bold text-slate-700">目前尚無開放中的零打場次</div>
           <p className="text-xs text-slate-400">
-            {selectedDate ? `日期 ${selectedDate} 當日無開團` : '近期尚無團主開團'}
+            {selectedDate ? `日期 ${selectedDate} 當日無開團` : '近期尚無團主開團，若剛建立可點擊下方重新整理'}
           </p>
           <div className="pt-2 flex justify-center gap-2">
             <button
-              onClick={() => fetchSessions()}
-              className="px-3 py-1.5 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 rounded-lg text-xs font-bold flex items-center gap-1"
+              onClick={() => fetchSessions(selectedDate, currentGroupId, true)}
+              className="px-3 py-1.5 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 rounded-lg text-xs font-bold flex items-center gap-1 transition-all active:scale-95"
             >
               <RefreshCw size={13} />
               重新整理
@@ -262,9 +263,9 @@ function SessionListContent() {
               <button
                 onClick={() => {
                   setCurrentGroupId('');
-                  fetchSessions(selectedDate, '');
+                  fetchSessions(selectedDate, '', true);
                 }}
-                className="px-3 py-1.5 bg-slate-100 text-slate-700 hover:bg-slate-200 rounded-lg text-xs font-medium flex items-center gap-1"
+                className="px-3 py-1.5 bg-slate-100 text-slate-700 hover:bg-slate-200 rounded-lg text-xs font-medium flex items-center gap-1 transition-all active:scale-95"
               >
                 <Globe size={13} />
                 查看全域所有場次
@@ -580,7 +581,7 @@ function SessionListContent() {
 
 export default function SessionListPage() {
   return (
-    <Suspense fallback={<div className="p-8 text-center text-xs text-slate-400">載入場次中...</div>}>
+    <Suspense fallback={<div className="p-8 text-center text-xs text-slate-400">正在讀取資料中，請稍候...</div>}>
       <SessionListContent />
     </Suspense>
   );

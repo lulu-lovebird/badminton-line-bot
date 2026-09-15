@@ -110,6 +110,7 @@ function AdminDashboardContent() {
   const [selectedSession, setSelectedSession] = useState<MatchSession | null>(null);
   const [registrations, setRegistrations] = useState<Registration[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadingSessions, setLoadingSessions] = useState(true);
   const [isAuthorized, setIsAuthorized] = useState<boolean | null>(null);
   const [userProfile, setUserProfile] = useState<{ line_user_id: string; display_name: string; role: string; is_super_admin?: boolean } | null>(null);
   const [idToken, setIdToken] = useState<string>('');
@@ -393,7 +394,7 @@ function AdminDashboardContent() {
         setUserProfile(user);
         if (user.role === 'host' || user.role === 'admin' || user.is_super_admin) {
           setIsAuthorized(true);
-          fetchSessions(token, user.line_user_id, false, user);
+          await fetchSessions(token, user.line_user_id, false, user);
           // 載入可用羽球群組供開團選取
           try {
             const gRes = await fetch('/api/groups');
@@ -441,7 +442,7 @@ function AdminDashboardContent() {
     forceRefresh = false,
     currentUserObj?: { line_user_id: string; role: string; is_super_admin?: boolean } | null
   ) {
-    setLoading(true);
+    setLoadingSessions(true);
     try {
       const activeUser = currentUserObj || userProfile;
       const currentToken = token || idToken;
@@ -473,7 +474,7 @@ function AdminDashboardContent() {
     } catch (e) {
       console.error(e);
     } finally {
-      setLoading(false);
+      setLoadingSessions(false);
     }
   }
 
@@ -709,9 +710,10 @@ function AdminDashboardContent() {
 
   if (loading) {
     return (
-      <main className="min-h-screen bg-slate-100 p-6 flex flex-col items-center justify-center text-center">
-        <RefreshCw size={36} className="animate-spin text-emerald-600 mb-3" />
-        <p className="text-xs text-slate-500 font-bold">驗證團主身分中，請稍候...</p>
+      <main className="min-h-screen bg-slate-100 p-6 flex flex-col items-center justify-center text-center space-y-3">
+        <RefreshCw size={36} className="animate-spin text-emerald-600 mb-1" />
+        <div className="text-sm font-bold text-slate-800">正在讀取資料中，請稍候...</div>
+        <p className="text-xs text-slate-400">正在驗證團主身分並同步最新場次資訊</p>
       </main>
     );
   }
@@ -1308,12 +1310,18 @@ function AdminDashboardContent() {
                 className="text-slate-400 hover:text-slate-600 active:scale-95 transition-all p-1 rounded"
                 title="強制重新整理 (繞過快取)"
               >
-                <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
+                <RefreshCw size={14} className={loadingSessions ? 'animate-spin' : ''} />
               </button>
             </div>
           </div>
 
-          {displayedSessions.length === 0 ? (
+          {loadingSessions ? (
+            <div className="text-center py-12 bg-white rounded-2xl border border-slate-200 text-xs space-y-2.5 p-6 shadow-sm">
+              <RefreshCw size={24} className="animate-spin text-emerald-600 mx-auto" />
+              <div className="text-sm font-bold text-slate-800">正在讀取資料中，請稍候...</div>
+              <div className="text-slate-400 text-[11px]">正在連線伺服器，即時同步您的開團名單</div>
+            </div>
+          ) : displayedSessions.length === 0 ? (
             <div className="text-center py-10 bg-white rounded-2xl border text-xs text-slate-500 space-y-2.5">
               <div className="text-slate-400">
                 {isSuperAdminUser
