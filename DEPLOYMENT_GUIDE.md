@@ -113,6 +113,7 @@
 | `SUPABASE_SERVICE_ROLE_KEY` | **必填** | 步驟 1 取得之 Supabase `service_role` secret key |
 | `DEBUG` | 選填 | 設為 `on` 啟用 LIFF 除錯診斷面板，預設 `off` (關閉) |
 | `SESSION_CACHE_TTL_SECONDS` | 選填 | 零打場次快取時效 (秒)，預設為 `30` |
+| `EXPIRED_SESSION_CLEANUP_DAYS` | 選填 | 歷史過期場次自動清理天數，預設 `7` 天。設為 `0` 則不刪除過期場次 |
 
 4. 點擊 **"Deploy"**！
 5. 等待約 1 分鐘，看到滿天彩帶畫面即代表部署成功！請複製 Vercel 提供給您的正式網址（例如：`https://badminton-line-bot-xxx.vercel.app`）。

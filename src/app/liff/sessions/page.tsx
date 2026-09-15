@@ -307,6 +307,11 @@ function SessionListContent() {
                     <span className="text-xs px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-800 border border-emerald-200 font-medium">
                       👤 團主：{s.host_name || '球團團主'}
                     </span>
+                    {s.status === 'cancelled' && (
+                      <span className="text-xs px-2 py-0.5 rounded-full bg-red-100 text-red-700 font-bold border border-red-200">
+                        🚫 場次已停用
+                      </span>
+                    )}
                     <span
                       className={`text-xs px-2 py-0.5 rounded-full font-medium border ${
                         s.is_roster_public === false
@@ -319,12 +324,18 @@ function SessionListContent() {
                   </div>
                   <span
                     className={`text-xs px-2.5 py-0.5 rounded-full font-bold ${
-                      isFull
+                      s.status === 'cancelled'
+                        ? 'bg-slate-200 text-slate-600'
+                        : isFull
                         ? 'bg-emerald-900 text-emerald-100'
                         : 'bg-emerald-100 text-emerald-800'
                     }`}
                   >
-                    {isFull ? '額滿 (可備取)' : `招募中 (${s.current_players || 0}/${s.max_players})`}
+                    {s.status === 'cancelled'
+                      ? '已停用'
+                      : isFull
+                      ? '額滿 (可備取)'
+                      : `招募中 (${s.current_players || 0}/${s.max_players})`}
                   </span>
                 </div>
 
@@ -554,21 +565,30 @@ function SessionListContent() {
                     </select>
                   </div>
 
-                  <button
-                    onClick={() => handleRegister(s)}
-                    disabled={submittingId === s.id}
-                    className={`px-4 py-2 rounded-xl text-xs font-bold text-white transition-all shadow-sm ${
-                      isFull
-                        ? 'bg-amber-600 hover:bg-amber-700'
-                        : 'bg-emerald-600 hover:bg-emerald-700'
-                    } disabled:opacity-50`}
-                  >
-                    {submittingId === s.id
-                      ? '處理中...'
-                      : isFull
-                      ? `登記備取 (目前備取 ${s.waitlist_count || 0})`
-                      : '立即報名'}
-                  </button>
+                  {s.status === 'cancelled' ? (
+                    <button
+                      disabled
+                      className="px-4 py-2 rounded-xl text-xs font-bold text-slate-400 bg-slate-100 border border-slate-200 cursor-not-allowed"
+                    >
+                      🚫 場次已暫停報名
+                    </button>
+                  ) : (
+                    <button
+                      onClick={() => handleRegister(s)}
+                      disabled={submittingId === s.id}
+                      className={`px-4 py-2 rounded-xl text-xs font-bold text-white transition-all shadow-sm ${
+                        isFull
+                          ? 'bg-amber-600 hover:bg-amber-700'
+                          : 'bg-emerald-600 hover:bg-emerald-700'
+                      } disabled:opacity-50`}
+                    >
+                      {submittingId === s.id
+                        ? '處理中...'
+                        : isFull
+                        ? `登記備取 (目前備取 ${s.waitlist_count || 0})`
+                        : '立即報名'}
+                    </button>
+                  )}
                 </div>
               </div>
             );

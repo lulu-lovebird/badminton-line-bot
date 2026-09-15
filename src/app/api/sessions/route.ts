@@ -11,11 +11,15 @@ import {
   getCacheTTLSeconds,
 } from '@/lib/session-cache';
 import { promoteWaitlistOnCapacityIncrease } from '@/lib/registration-service';
+import { cleanupExpiredSessions } from '@/lib/session-cleanup';
 
 export const dynamic = 'force-dynamic';
 
-// 取得場次清單 (支援快取、群組場次與全域公開場次)
+// 取得場次清單 (支援快取、自動過期清理、群組場次與全域公開場次)
 export async function GET(req: NextRequest) {
+  // 背景防抖執行過期場次自動清理 (依 EXPIRED_SESSION_CLEANUP_DAYS，預設 7 天；若為 0 則不清理)
+  cleanupExpiredSessions().catch((err) => console.warn('[Auto Cleanup] 執行異常:', err));
+
   const { searchParams } = new URL(req.url);
   // 1. 參數正規化 (去除多餘空白以防 Cache Key 碰撞)
   const groupId = searchParams.get('groupId')?.trim() || null;
@@ -421,6 +425,8 @@ export async function PATCH(req: NextRequest) {
     const body = await req.json();
     const {
       id,
+      action,
+      status: targetStatus,
       title,
       match_type,
       start_time,
@@ -451,7 +457,7 @@ export async function PATCH(req: NextRequest) {
       return NextResponse.json({ error: '找不到該場次' }, { status: 404 });
     }
 
-    // 2. 權限檢查：只有原始主揪團主本人或 Super Admin 可修改該場次
+    // 2. 權限檢查：只有原始主揪團主本人或 Super Admin 可修改或停用該場次
     const isHostOwner = Boolean(
       existingSession.host_user_id &&
       callerUserId &&
@@ -460,19 +466,39 @@ export async function PATCH(req: NextRequest) {
 
     if (!isHostOwner && !isSuperAdminUser) {
       return NextResponse.json(
-        { error: '權限不足：只有此場次的原始主揪團主或超級管理員可以修改場次內容' },
+        { error: '權限不足：只有此場次的原始主揪團主或超級管理員可以管理該場次' },
         { status: 403 }
       );
     }
 
-    // 3. 時效檢查：只有時間未到達的場次可以修改
+    // 3. 處理「停用場次 (disable / cancel)」或「重新啟用 (enable / open)」操作
+    if (action === 'disable' || targetStatus === 'cancelled' || targetStatus === 'closed') {
+      const newStatus = targetStatus || 'cancelled';
+      const { data: disabledSession, error: dErr } = await supabaseAdmin
+        .from('match_sessions')
+        .update({
+          status: newStatus,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', id)
+        .select()
+        .single();
+
+      if (dErr) {
+        return NextResponse.json({ error: dErr.message }, { status: 500 });
+      }
+      invalidateSessionCache();
+      return NextResponse.json(disabledSession);
+    }
+
+    // 4. 時效檢查：只有時間尚未開始之場次可以修改內容或重新啟用
     const now = new Date();
     const sessionStartTime = new Date(existingSession.start_time);
     if (sessionStartTime.getTime() <= now.getTime()) {
-      return NextResponse.json({ error: '此場次已開始或已結束，無法再進行修改' }, { status: 400 });
+      return NextResponse.json({ error: '此場次已開始或已結束，無法再修改或重啟' }, { status: 400 });
     }
 
-    // 4. 正取人數下限檢查：不可小於目前已報名之正取人數
+    // 5. 正取人數下限檢查：不可小於目前已報名之正取人數
     const { data: mainRegs } = await supabaseAdmin
       .from('registrations')
       .select('party_size')
@@ -489,7 +515,7 @@ export async function PATCH(req: NextRequest) {
       );
     }
 
-    // 5. 執行更新
+    // 6. 執行更新
     const updatePayload: Record<string, unknown> = {
       updated_at: new Date().toISOString(),
     };
@@ -511,9 +537,11 @@ export async function PATCH(req: NextRequest) {
     if (is_roster_public !== undefined) updatePayload.is_roster_public = Boolean(is_roster_public);
 
     // 更新狀態
-    if (newMaxPlayers > currentMainCount) {
+    if (action === 'enable' || targetStatus === 'open') {
+      updatePayload.status = newMaxPlayers > currentMainCount ? 'open' : 'full';
+    } else if (newMaxPlayers > currentMainCount && existingSession.status !== 'cancelled') {
       updatePayload.status = 'open';
-    } else if (newMaxPlayers === currentMainCount) {
+    } else if (newMaxPlayers === currentMainCount && existingSession.status !== 'cancelled') {
       updatePayload.status = 'full';
     }
 
@@ -541,7 +569,7 @@ export async function PATCH(req: NextRequest) {
       return NextResponse.json({ error: updateErr.message }, { status: 500 });
     }
 
-    // 6. 若正取人數上限調高，自動依序遞補備取球友至正取
+    // 7. 若正取人數上限調高，自動依序遞補備取球友至正取
     if (newMaxPlayers > existingSession.max_players) {
       try {
         await promoteWaitlistOnCapacityIncrease(id, newMaxPlayers);
@@ -550,12 +578,103 @@ export async function PATCH(req: NextRequest) {
       }
     }
 
-    // 7. 🔄 立即失效場次快取
+    // 8. 🔄 立即失效場次快取
     invalidateSessionCache();
 
     return NextResponse.json(updatedSession);
   } catch (err: unknown) {
     const errorMsg = err instanceof Error ? err.message : '修改場次失敗';
+    return NextResponse.json({ error: errorMsg }, { status: 500 });
+  }
+}
+
+// 刪除場次 (限原始主揪團主或 Super Admin)
+export async function DELETE(req: NextRequest) {
+  try {
+    const { searchParams } = new URL(req.url);
+    let id = searchParams.get('id')?.trim();
+
+    if (!id) {
+      const body = await req.json().catch(() => ({}));
+      id = body?.id;
+    }
+
+    if (!id) {
+      return NextResponse.json({ error: '缺少場次 ID' }, { status: 400 });
+    }
+
+    // 驗證身分
+    let callerUserId: string | null = null;
+    const authHeader = req.headers.get('authorization');
+    if (authHeader?.startsWith('Bearer ')) {
+      const token = authHeader.split(' ')[1];
+      const verified = await verifyLineIdToken(token);
+      if (verified) callerUserId = verified.sub;
+    }
+
+    const testUserId = req.headers.get('x-test-user-id');
+    if (!callerUserId && process.env.NODE_ENV !== 'production' && testUserId) {
+      callerUserId = testUserId;
+    }
+
+    if (!callerUserId) {
+      return NextResponse.json({ error: '身分驗證未通過，請重新登入' }, { status: 401 });
+    }
+
+    // 查詢使用者角色
+    const { data: user } = await supabaseAdmin
+      .from('users')
+      .select('role')
+      .eq('line_user_id', callerUserId)
+      .maybeSingle();
+
+    const isSuperAdminUser = isSuperAdmin(callerUserId) || user?.role === 'admin';
+
+    // 查詢目標場次
+    const { data: session, error: sErr } = await supabaseAdmin
+      .from('match_sessions')
+      .select('id, title, host_user_id')
+      .eq('id', id)
+      .single();
+
+    if (sErr || !session) {
+      return NextResponse.json({ error: '找不到該場次或已先行刪除' }, { status: 404 });
+    }
+
+    // 權限檢查：只有原始主揪團主本人或 Super Admin 可以刪除場次
+    const isHostOwner = Boolean(
+      session.host_user_id &&
+      callerUserId &&
+      session.host_user_id === callerUserId
+    );
+
+    if (!isHostOwner && !isSuperAdminUser) {
+      return NextResponse.json(
+        { error: '權限不足：只有此場次的原始主揪團主或超級管理員可以刪除場次' },
+        { status: 403 }
+      );
+    }
+
+    // 執行刪除 (依據資料庫外鍵 ON DELETE CASCADE，相關 registrations 會由資料庫自動連帶清除)
+    const { error: delErr } = await supabaseAdmin
+      .from('match_sessions')
+      .delete()
+      .eq('id', id);
+
+    if (delErr) {
+      console.error('刪除 match_sessions 錯誤:', delErr);
+      return NextResponse.json({ error: delErr.message }, { status: 500 });
+    }
+
+    // 立即失效快取
+    invalidateSessionCache();
+
+    return NextResponse.json({
+      success: true,
+      message: `場次「${session.title}」已永久刪除`,
+    });
+  } catch (err: unknown) {
+    const errorMsg = err instanceof Error ? err.message : '刪除場次失敗';
     return NextResponse.json({ error: errorMsg }, { status: 500 });
   }
 }

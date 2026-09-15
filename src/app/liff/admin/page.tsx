@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useMemo, Suspense } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
-import { PlusCircle, Users, CheckCircle, Clock, Calendar, MapPin, Send, AlertCircle, RefreshCw, ShieldAlert, Key, Copy, Shield, UserPlus, FileText, User, Share2, Pencil, X } from 'lucide-react';
+import { PlusCircle, Users, CheckCircle, Clock, Calendar, MapPin, Send, AlertCircle, RefreshCw, ShieldAlert, Key, Copy, Shield, UserPlus, FileText, User, Share2, Pencil, X, Ban, Trash2 } from 'lucide-react';
 import { MatchSession, Registration } from '@/types/database';
 import { initLiff } from '@/lib/liff-client';
 import { getSessionLiffUrl, formatSessionAnnouncement, shareSessionViaTargetPicker } from '@/lib/share-utils';
@@ -351,6 +351,81 @@ function AdminDashboardContent() {
       setEditNotice({ type: 'error', text: msg });
     } finally {
       setIsUpdating(false);
+    }
+  }
+
+  async function handleToggleDisableSession(session: MatchSession) {
+    if (!canManageSession(session)) {
+      alert('您無權變更此場次狀態');
+      return;
+    }
+    const isCurrentlyCancelled = session.status === 'cancelled';
+    const actionName = isCurrentlyCancelled ? '重新啟用' : '停用';
+    const confirmMsg = isCurrentlyCancelled
+      ? `確定要重新開放「${session.title}」場次嗎？\n啟用後球友將可以繼續報名此場次。`
+      : `確定要停用「${session.title}」場次嗎？\n停用後球友將無法報名此場次，但現有名單仍會保留。`;
+
+    if (!confirm(confirmMsg)) return;
+
+    try {
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      if (idToken) headers['Authorization'] = `Bearer ${idToken}`;
+      else if (userProfile?.line_user_id) headers['x-test-user-id'] = userProfile.line_user_id;
+
+      const res = await fetch('/api/sessions', {
+        method: 'PATCH',
+        headers,
+        body: JSON.stringify({
+          id: session.id,
+          status: isCurrentlyCancelled ? 'open' : 'cancelled',
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || `${actionName}場次失敗`);
+      }
+
+      alert(`✅ 場次已成功${actionName}！`);
+      await fetchSessions(idToken, userProfile?.line_user_id, true);
+      if (selectedSession && selectedSession.id === session.id) {
+        setSelectedSession((prev) => (prev ? { ...prev, status: isCurrentlyCancelled ? 'open' : 'cancelled' } : null));
+      }
+    } catch (err: unknown) {
+      alert(err instanceof Error ? err.message : `${actionName}失敗`);
+    }
+  }
+
+  async function handleDeleteSession(session: MatchSession) {
+    if (!canManageSession(session)) {
+      alert('您無權刪除此場次');
+      return;
+    }
+    const confirmMsg = `⚠️ 警告：確定要刪除「${session.title}」場次嗎？\n\n此動作將永久從系統與資料庫中刪除此場次及其所有球友報名與候補記錄，且無法復原！`;
+    if (!confirm(confirmMsg)) return;
+
+    try {
+      const headers: Record<string, string> = {};
+      if (idToken) headers['Authorization'] = `Bearer ${idToken}`;
+      else if (userProfile?.line_user_id) headers['x-test-user-id'] = userProfile.line_user_id;
+
+      const res = await fetch(`/api/sessions?id=${session.id}`, {
+        method: 'DELETE',
+        headers,
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || '刪除場次失敗');
+      }
+
+      alert('🗑️ 場次及其報名記錄已成功刪除！');
+      if (selectedSession && selectedSession.id === session.id) {
+        setSelectedSession(null);
+      }
+      await fetchSessions(idToken, userProfile?.line_user_id, true);
+    } catch (err: unknown) {
+      alert(err instanceof Error ? err.message : '刪除失敗');
     }
   }
 
@@ -1357,6 +1432,11 @@ function AdminDashboardContent() {
                           我開的團
                         </span>
                       )}
+                      {s.status === 'cancelled' && (
+                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-red-100 text-red-700 font-bold border border-red-200">
+                          🚫 已停用
+                        </span>
+                      )}
                       {s.is_roster_public === false ? (
                         <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-50 text-amber-800 font-bold border border-amber-200">
                           🔒 私密名單
@@ -1369,12 +1449,16 @@ function AdminDashboardContent() {
                     </div>
                     <span
                       className={`text-xs px-2.5 py-0.5 rounded-full font-bold ${
-                        isFull
+                        s.status === 'cancelled'
+                          ? 'bg-slate-200 text-slate-600'
+                          : isFull
                           ? 'bg-emerald-800 text-emerald-100'
                           : 'bg-emerald-100 text-emerald-800'
                       }`}
                     >
-                      {isFull
+                      {s.status === 'cancelled'
+                        ? '已停用'
+                        : isFull
                         ? `已額滿 (${s.current_players}/${s.max_players})`
                         : `招募中 (${s.current_players}/${s.max_players})`}
                     </span>
@@ -1472,22 +1556,66 @@ function AdminDashboardContent() {
               ← 返回場次總覽
             </button>
             <div className="flex items-center gap-1.5 flex-wrap">
-              {/* ✏️ 編輯場次按鈕 (限原始主揪團主或 Super Admin，且尚未開始之場次) */}
+              {/* ✏️ 編輯、停用、刪除場次按鈕 (限原始主揪團主或 Super Admin) */}
               {canManageSession(selectedSession) && (
                 new Date(selectedSession.start_time).getTime() > Date.now() ? (
-                  <button
-                    type="button"
-                    onClick={() => handleOpenEditSession(selectedSession)}
-                    className="px-3 py-1 bg-blue-50 hover:bg-blue-100 text-blue-800 border border-blue-300 rounded-lg font-bold flex items-center gap-1 text-xs active:scale-95 transition-all shadow-sm"
-                    title="修改場次時間、地點或人數上限"
-                  >
-                    <Pencil size={13} className="text-blue-600" />
-                    <span>修改場次</span>
-                  </button>
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => handleOpenEditSession(selectedSession)}
+                      className="px-3 py-1 bg-blue-50 hover:bg-blue-100 text-blue-800 border border-blue-300 rounded-lg font-bold flex items-center gap-1 text-xs active:scale-95 transition-all shadow-sm"
+                      title="修改場次時間、地點或人數上限"
+                    >
+                      <Pencil size={13} className="text-blue-600" />
+                      <span>修改場次</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleToggleDisableSession(selectedSession)}
+                      className={`px-3 py-1 border rounded-lg font-bold flex items-center gap-1 text-xs active:scale-95 transition-all shadow-sm ${
+                        selectedSession.status === 'cancelled'
+                          ? 'bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border-emerald-300'
+                          : 'bg-amber-50 hover:bg-amber-100 text-amber-800 border-amber-300'
+                      }`}
+                      title={selectedSession.status === 'cancelled' ? '重新開放本場次球友報名' : '暫停此場次報名（球友將無法報名）'}
+                    >
+                      {selectedSession.status === 'cancelled' ? (
+                        <>
+                          <CheckCircle size={13} className="text-emerald-600" />
+                          <span>重新啟用</span>
+                        </>
+                      ) : (
+                        <>
+                          <Ban size={13} className="text-amber-600" />
+                          <span>停用場次</span>
+                        </>
+                      )}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleDeleteSession(selectedSession)}
+                      className="px-3 py-1 bg-red-50 hover:bg-red-100 text-red-800 border border-red-300 rounded-lg font-bold flex items-center gap-1 text-xs active:scale-95 transition-all shadow-sm"
+                      title="永久刪除此場次及所有報名資料"
+                    >
+                      <Trash2 size={13} className="text-red-600" />
+                      <span>刪除場次</span>
+                    </button>
+                  </>
                 ) : (
-                  <span className="px-2.5 py-1 bg-slate-100 text-slate-400 rounded-lg text-xs font-semibold">
-                    場次已結束
-                  </span>
+                  <>
+                    <span className="px-2.5 py-1 bg-slate-100 text-slate-400 rounded-lg text-xs font-semibold">
+                      場次已結束
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => handleDeleteSession(selectedSession)}
+                      className="px-3 py-1 bg-red-50 hover:bg-red-100 text-red-800 border border-red-300 rounded-lg font-bold flex items-center gap-1 text-xs active:scale-95 transition-all shadow-sm"
+                      title="永久刪除此場次及所有報名資料"
+                    >
+                      <Trash2 size={13} className="text-red-600" />
+                      <span>刪除場次</span>
+                    </button>
+                  </>
                 )
               )}
               <button
@@ -1506,6 +1634,11 @@ function AdminDashboardContent() {
             <div className="flex items-center justify-between gap-2 mb-1">
               <div className="flex items-center gap-1.5 flex-wrap">
                 <h2 className="font-bold text-slate-800 text-base">{selectedSession.title}</h2>
+                {selectedSession.status === 'cancelled' && (
+                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-red-100 text-red-700 border border-red-200 font-bold">
+                    🚫 已停用/已取消
+                  </span>
+                )}
                 {selectedSession.is_roster_public === false ? (
                   <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-50 text-amber-800 border border-amber-200 font-bold">
                     🔒 私密名單
@@ -1521,6 +1654,13 @@ function AdminDashboardContent() {
               </span>
             </div>
             <p className="text-xs text-slate-500 mt-1">{selectedSession.location}</p>
+
+            {selectedSession.status === 'cancelled' && (
+              <div className="mt-2.5 p-2.5 bg-red-50 border border-red-200 rounded-xl text-xs text-red-700 flex items-center gap-2">
+                <Ban size={15} className="text-red-600 shrink-0" />
+                <span className="font-medium">此場次目前為「已停用/已取消」狀態，球友無法進行報名。點擊上方「重新啟用」即可恢復開放。</span>
+              </div>
+            )}
 
             {/* 📢 推播開團卡片至 LINE 群組 */}
             <div className="mt-3 pt-3 border-t border-slate-100 flex items-center justify-between gap-2">

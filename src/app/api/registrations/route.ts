@@ -248,6 +248,10 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: '場次不存在' }, { status: 404 });
     }
 
+    if (session.status === 'cancelled' || session.status === 'closed') {
+      return NextResponse.json({ error: '此場次已停用或已取消，無法報名' }, { status: 400 });
+    }
+
     // 🛡️ 核心防護：若本場次有綁定群組，且報名者不是團主代報名，必須驗證是否為該群組成員
     if (session.group_id && !targetUserId.startsWith('proxy_')) {
       const inGroup = await isUserInGroup(session.group_id, targetUserId);

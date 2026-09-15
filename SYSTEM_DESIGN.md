@@ -242,8 +242,10 @@ erDiagram
 | :--- | :--- | :--- | :--- |
 | `POST` | `/api/webhook` | 接收 LINE 官方 Webhook 事件 (加入群組、文字指令) | LINE 簽名驗證 |
 | `GET` | `/api/auth/me` | 驗證 LINE ID Token，回傳個人檔案、角色與是否為 Super Admin | 登入球友 |
-| `GET` | `/api/sessions` | 查詢開放場次（支援 `date`, `status`, `groupId` 篩選） | 群組成員 / 公開 |
-| `POST` | `/api/sessions` | 建立新零打場次，並自動發送 Flex Message 卡片 | 團主 (`host`) |
+| `GET` | `/api/sessions` | 查詢開放場次（支援 `date`, `status`, `groupId` 篩選，內建過期自動清理節流） | 群組成員 / 公開 |
+| `POST` | `/api/sessions` | 建立新零打場次，並可選擇發送 Flex Message 卡片至群組 | 團主 (`host`) |
+| `PATCH` | `/api/sessions` | 編輯場次內容或變更狀態（如停用 `status: 'cancelled'`、重新啟用 `status: 'open'`） | 團主 / 超級管理員 |
+| `DELETE` | `/api/sessions` | 刪除場次（原子級聯刪除該場次所有球友報名與候補名單） | 團主 / 超級管理員 |
 | `GET` | `/api/registrations` | 查詢個人報名紀錄（自動偵測時間衝突）或場次名單 | 登入球友 / 團主 |
 | `POST` | `/api/registrations` | 球友報名 / 備取排隊 / 團主代報名 (+1) | 群組成員 / 團主 |
 | `PATCH` | `/api/registrations` | 取消報名（觸發自動遞補）或修改付款狀態（橘/綠切換） | 當事人 / 團主 |
@@ -291,9 +293,10 @@ SUPABASE_URL=https://your-project.supabase.co
 SUPABASE_ANON_KEY=your_supabase_anon_key
 SUPABASE_SERVICE_ROLE_KEY=your_supabase_service_role_key
 
-# 系統除錯與快取 (選填)
+# 系統除錯、快取與過期自動清理 (選填)
 DEBUG=off
 SESSION_CACHE_TTL_SECONDS=30
+EXPIRED_SESSION_CLEANUP_DAYS=7
 ```
 
 ### 步驟 4: 部署到 Vercel
