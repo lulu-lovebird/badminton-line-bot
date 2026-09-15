@@ -211,7 +211,10 @@ export async function shareSessionViaTargetPicker(liff: any, session: MatchSessi
     return { ok: false, message: '請先在 LINE 中登入' };
   }
   if (!liff.isApiAvailable('shareTargetPicker')) {
-    return { ok: false, message: '您的環境目前不支援社群分享器（請使用下方「複製連結」貼至群組）' };
+    return {
+      ok: false,
+      message: '您的 LINE 環境尚未啟用社群分享器。\n\n💡 請至 LINE Developers Console -> LIFF 分頁，將該 LIFF App 的「Share Target Picker」開關切換為【ON】啟用。\n\n目前您可以直接點擊下方「複製報名連結」或「複製開團文案」貼至群組！',
+    };
   }
 
   try {

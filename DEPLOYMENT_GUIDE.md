@@ -65,6 +65,7 @@
    - **Endpoint URL**：先暫填 `https://localhost:3000/liff/sessions`（等稍後 Vercel 部署完拿到正式網址再回頭修改）
    - **Scopes**：勾選 `profile` 與 `openid`
    - **Bot link feature**：選擇 `On (Normal)`（讓球友開啟 LIFF 時順便加機器人好友）
+   - **Share Target Picker**：設定為 **On**（⚠️ 極重要！開啟後團主才能免額度使用社群分享器送出 Flex 互動卡片）
    - 點擊 **Add** 建立完成。
 3. 複製並記錄生成的 **LIFF ID**（格式如 `1234567890-AbCdEfGh`，對應 `NEXT_PUBLIC_LIFF_ID`）。
    - 對應的 `NEXT_PUBLIC_LIFF_URL` 即為 `https://liff.line.me/<你的LIFF_ID>`。

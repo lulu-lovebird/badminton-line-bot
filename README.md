@@ -104,6 +104,7 @@ flowchart TD
 2. 建立一個 **LIFF App**：
    - Endpoint URL 設定為你的專案網址（例如：`https://你的域名/liff/sessions`）。
    - Scope 勾選 `profile` 與 `openid`。
+   - **Share Target Picker**：設定為 **On**（⚠️ 必開！開啟後才能免額度使用社群分享器發送 Flex 卡片至群組）。
    - 取得 `LIFF ID`。
 
 ### 步驟 3: 本地開發環境變數設定
