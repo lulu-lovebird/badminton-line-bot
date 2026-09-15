@@ -61,7 +61,7 @@
     <circle cx="416" cy="275" r="175" fill="#fef3c7" stroke="#10b981" stroke-width="8"/>
     <!-- 裁切圓形展示 JuJu 的可愛面容 -->
     <g clip-path="url(#circleClip)">
-      <image xlink:href="/images/juju.png" href="/images/juju.png" x="180" y="80" width="460" height="690" />
+      <image xlink:href="/images/juju_badminton.jpg" href="/images/juju_badminton.jpg" x="180" y="80" width="460" height="690" />
     </g>
     <!-- 可愛羽球小徽章掛在框邊 -->
     <circle cx="540" cy="390" r="46" fill="#10b981" stroke="#ffffff" stroke-width="4"/>
