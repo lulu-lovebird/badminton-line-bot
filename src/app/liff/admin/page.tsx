@@ -127,17 +127,18 @@ function AdminDashboardContent() {
     return session.host_user_id === userProfile.line_user_id;
   }
 
-  // 篩選後呈現之場次：一般團主僅能見自己建立之場次；超級管理員可全覽或切換
+  // 篩選後呈現之場次：一般團主僅能見自己建立之場次；超級管理員可全覽或切換 (徹底排除已刪除場次)
   const displayedSessions = useMemo(() => {
+    const nonDeleted = sessions.filter((s) => s.status !== 'deleted');
     if (isSuperAdminUser) {
       if (adminFilter === 'mine' && userProfile?.line_user_id) {
-        return sessions.filter((s) => s.host_user_id === userProfile.line_user_id);
+        return nonDeleted.filter((s) => s.host_user_id === userProfile.line_user_id);
       }
-      return sessions;
+      return nonDeleted;
     }
     // 一般團主：嚴格只保留自己建立的場次 (前端雙重防護)
     if (!userProfile?.line_user_id) return [];
-    return sessions.filter((s) => s.host_user_id === userProfile.line_user_id);
+    return nonDeleted.filter((s) => s.host_user_id === userProfile.line_user_id);
   }, [sessions, isSuperAdminUser, adminFilter, userProfile?.line_user_id]);
 
   // 團主申請狀態

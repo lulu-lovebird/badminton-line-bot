@@ -29,13 +29,26 @@ function SessionListContent() {
   const [expandedRosters, setExpandedRosters] = useState<Record<string, boolean>>({});
   const [rosterData, setRosterData] = useState<Record<string, { loading: boolean; list: RosterItem[]; error?: string }>>({});
 
+  // 取得台灣時區當天日期字串 YYYY-MM-DD，防呆阻止選擇已過去的日期
+  const todayTaipeiStr = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Taipei' }).format(new Date());
+
   const { userProfile, idToken } = useLiff();
+
+  // 🛡️ 篩選僅開放報名之未來場次：未過開打時間、非停用、非已刪除
+  const now = Date.now();
+  const availableSessions = (sessions || []).filter((s) => {
+    const isPast = new Date(s.start_time).getTime() <= now;
+    const isDeleted = s.status === 'deleted';
+    const isCancelled = s.status === 'cancelled';
+    return !isPast && !isDeleted && !isCancelled;
+  });
 
   // 取得場次 (支援智慧快取與強制刷新)
   async function fetchSessions(dateFilter = selectedDate, groupFilter = currentGroupId, isManualRefresh = false) {
     setLoading(true);
     try {
       const params = new URLSearchParams();
+      params.append('upcomingOnly', 'true');
       if (groupFilter) params.append('groupId', groupFilter);
       if (dateFilter) params.append('date', dateFilter);
       if (isManualRefresh) {
@@ -117,6 +130,11 @@ function SessionListContent() {
   const handleRegister = async (session: MatchSession) => {
     if (!userProfile) {
       alert('請先在 LINE 中開啟或登入！');
+      return;
+    }
+
+    if (new Date(session.start_time).getTime() <= Date.now()) {
+      alert('⚠️ 此場次已超過開始時間，已截止報名！');
       return;
     }
 
@@ -217,6 +235,7 @@ function SessionListContent() {
         <div className="flex gap-2">
           <input
             type="date"
+            min={todayTaipeiStr}
             className="text-xs border rounded p-1.5 outline-none focus:border-emerald-500"
             value={selectedDate}
             onChange={(e) => {
@@ -245,11 +264,11 @@ function SessionListContent() {
           <div className="text-sm font-bold text-slate-800">正在讀取資料中，請稍候...</div>
           <div className="text-slate-400 text-[11px]">正在連線伺服器，即時同步最新開團與報名名單</div>
         </div>
-      ) : sessions.length === 0 ? (
+      ) : availableSessions.length === 0 ? (
         <div className="text-center py-12 px-4 bg-white rounded-2xl border border-slate-200 text-slate-500 space-y-3 shadow-sm">
           <div className="text-sm font-bold text-slate-700">目前尚無開放中的零打場次</div>
           <p className="text-xs text-slate-400">
-            {selectedDate ? `日期 ${selectedDate} 當日無開團` : '近期尚無團主開團，若剛建立可點擊下方重新整理'}
+            {selectedDate ? `日期 ${selectedDate} 當日無尚未開打之場次` : '近期尚無開放中場次，若剛開團可點擊下方重新整理'}
           </p>
           <div className="pt-2 flex justify-center gap-2">
             <button
@@ -276,8 +295,8 @@ function SessionListContent() {
       ) : (
         <div className="space-y-4">
           {(targetSessionId
-            ? [...sessions].sort((a, b) => (a.id === targetSessionId ? -1 : b.id === targetSessionId ? 1 : 0))
-            : sessions
+            ? [...availableSessions].sort((a, b) => (a.id === targetSessionId ? -1 : b.id === targetSessionId ? 1 : 0))
+            : availableSessions
           ).map((s) => {
             const isTarget = s.id === targetSessionId;
             const isFull = (s.current_players || 0) >= s.max_players;
@@ -565,12 +584,14 @@ function SessionListContent() {
                     </select>
                   </div>
 
-                  {s.status === 'cancelled' ? (
+                  {s.status === 'cancelled' || new Date(s.start_time).getTime() <= Date.now() ? (
                     <button
                       disabled
                       className="px-4 py-2 rounded-xl text-xs font-bold text-slate-400 bg-slate-100 border border-slate-200 cursor-not-allowed"
                     >
-                      🚫 場次已暫停報名
+                      {new Date(s.start_time).getTime() <= Date.now()
+                        ? '⏰ 開打時間已過 (截止報名)'
+                        : '🚫 場次已暫停報名'}
                     </button>
                   ) : (
                     <button

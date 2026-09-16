@@ -155,7 +155,12 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
-  const hostUserIds = Array.from(new Set((records || []).map((r) => r.session?.host_user_id).filter(Boolean)));
+  // 🛡️ 排除已刪除場次的報名紀錄 (match_sessions 關聯為 null 或 status 為 deleted)
+  const activeRecords = (records || []).filter(
+    (r) => r.session && r.session.status !== 'deleted'
+  );
+
+  const hostUserIds = Array.from(new Set(activeRecords.map((r) => r.session?.host_user_id).filter(Boolean)));
   const { data: hostUsers } = await supabaseAdmin
     .from('users')
     .select('line_user_id, display_name')
@@ -183,7 +188,7 @@ export async function GET(req: NextRequest) {
     }
   }
 
-  const recordsWithConflict = (records || []).map((rec, i, arr) => {
+  const recordsWithConflict = activeRecords.map((rec, i, arr) => {
     let hasConflict = false;
     if (rec.session && rec.status === 'main') {
       const startA = new Date(rec.session.start_time).getTime();
@@ -248,8 +253,13 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: '場次不存在' }, { status: 404 });
     }
 
-    if (session.status === 'cancelled' || session.status === 'closed') {
+    if (session.status === 'cancelled' || session.status === 'closed' || session.status === 'deleted') {
       return NextResponse.json({ error: '此場次已停用或已取消，無法報名' }, { status: 400 });
+    }
+
+    // 🛡️ 關鍵防護：場次開始時間比現在時間還早 (已過開始時間)，不得報名
+    if (new Date(session.start_time).getTime() <= Date.now()) {
+      return NextResponse.json({ error: '此場次已超過開始時間，已截止報名！' }, { status: 400 });
     }
 
     // 🛡️ 核心防護：若本場次有綁定群組，且報名者不是團主代報名，必須驗證是否為該群組成員
@@ -365,6 +375,19 @@ export async function PATCH(req: NextRequest) {
     if (action === 'cancel') {
       if (!isOwner && !isHostOrAdmin) {
         return NextResponse.json({ error: '無權取消他人報名' }, { status: 403 });
+      }
+
+      // 檢查場次開打時間：一般球友不得取消已開始或已過期之場次
+      if (!isHostOrAdmin) {
+        const { data: sData } = await supabaseAdmin
+          .from('match_sessions')
+          .select('start_time')
+          .eq('id', reg.session_id)
+          .single();
+
+        if (sData && new Date(sData.start_time).getTime() <= Date.now()) {
+          return NextResponse.json({ error: '此場次開打時間已過，無法線上取消報名！' }, { status: 400 });
+        }
       }
 
       await cancelRegistrationAndPromote(registration_id);

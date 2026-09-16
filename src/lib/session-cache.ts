@@ -49,12 +49,14 @@ export function generateSessionCacheKey(params: {
   date?: string | null;
   status?: string | null;
   hostId?: string | null;
+  upcomingOnly?: boolean | null;
 }): string {
   const g = encodeURIComponent((params.groupId || '').trim() || 'all');
   const d = encodeURIComponent((params.date || '').trim() || 'all');
   const s = encodeURIComponent((params.status || '').trim() || 'all');
   const h = encodeURIComponent((params.hostId || '').trim() || 'all');
-  return `sessions:g=${g}:d=${d}:s=${s}:h=${h}`;
+  const u = params.upcomingOnly ? '1' : '0';
+  return `sessions:g=${g}:d=${d}:s=${s}:h=${h}:u=${u}`;
 }
 
 export interface CacheLookupResult<T> {

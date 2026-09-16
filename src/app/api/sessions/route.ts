@@ -26,11 +26,12 @@ export async function GET(req: NextRequest) {
   const date = searchParams.get('date')?.trim() || null;
   const status = searchParams.get('status')?.trim() || null;
   const hostId = searchParams.get('hostId')?.trim() || null;
+  const upcomingOnly = searchParams.get('upcomingOnly') === 'true';
   const isRefresh =
     searchParams.get('refresh') === 'true' ||
     req.headers.get('cache-control')?.includes('no-cache');
 
-  const cacheKey = generateSessionCacheKey({ groupId, date, status, hostId });
+  const cacheKey = generateSessionCacheKey({ groupId, date, status, hostId, upcomingOnly });
   const ttl = getCacheTTLSeconds();
 
   // 2. 若非強制刷新，優先檢查記憶體快取 (命中時 0 次 Supabase 連線)
@@ -53,6 +54,7 @@ export async function GET(req: NextRequest) {
     let query = supabaseAdmin
       .from('match_sessions')
       .select('*')
+      .neq('status', 'deleted')
       .order('start_time', { ascending: true });
 
     // 若指定團主 ID (例如團主後台僅看自己建立之場次)
@@ -63,6 +65,14 @@ export async function GET(req: NextRequest) {
     // 若有提供群組，顯示該群專屬場次 + 全域公開場次 (group_id 為 null)
     if (groupId) {
       query = query.or(`group_id.eq.${groupId},group_id.is.null`);
+    }
+
+    // 若為球友報名模式 (upcomingOnly)，僅撈取尚未開打且開放報名/候補之場次
+    if (upcomingOnly) {
+      query = query.gt('start_time', new Date().toISOString());
+      if (!status) {
+        query = query.in('status', ['open', 'full']);
+      }
     }
 
     if (status) {
@@ -181,7 +191,7 @@ export async function GET(req: NextRequest) {
       }
     }
 
-    const computed = sessions.map((session) => {
+    let computed = sessions.map((session) => {
       const sessionRegs = (regs || []).filter((r) => r.session_id === session.id);
       const mainCount = sessionRegs
         .filter((r) => r.status === 'main')
@@ -200,6 +210,19 @@ export async function GET(req: NextRequest) {
         waitlist_count: waitlistCount,
       };
     });
+
+    // 雙重防護過濾：徹底排除已刪除場次，若為 upcomingOnly 則僅保留尚未開打且未停用之場次
+    if (upcomingOnly) {
+      const nowMs = Date.now();
+      computed = computed.filter(
+        (s) =>
+          new Date(s.start_time).getTime() > nowMs &&
+          s.status !== 'deleted' &&
+          s.status !== 'cancelled'
+      );
+    } else {
+      computed = computed.filter((s) => s.status !== 'deleted');
+    }
 
     // 寫入智慧快取
     setSessionCache(cacheKey, computed);

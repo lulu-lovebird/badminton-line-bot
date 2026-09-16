@@ -1,6 +1,6 @@
 export type UserRole = 'member' | 'pending_host' | 'host' | 'admin';
 export type MatchType = 'single' | 'double' | 'any';
-export type SessionStatus = 'open' | 'full' | 'closed' | 'cancelled';
+export type SessionStatus = 'open' | 'full' | 'closed' | 'cancelled' | 'deleted';
 export type RegistrationStatus = 'main' | 'waitlist' | 'cancelled';
 export type PaymentStatus = 'unpaid' | 'paid';
 export type AttendanceStatus = 'pending' | 'attended' | 'absent';

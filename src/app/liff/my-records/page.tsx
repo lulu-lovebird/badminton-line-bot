@@ -66,7 +66,12 @@ export default function MyRecordsPage() {
     }
   }
 
-  const handleCancel = async (recordId: string, sessionTitle: string) => {
+  const handleCancel = async (recordId: string, sessionTitle: string, startTime?: string) => {
+    if (startTime && new Date(startTime).getTime() <= Date.now()) {
+      alert('⚠️ 此場次開打時間已過，無法取消報名！');
+      return;
+    }
+
     const ok = window.confirm(`確定要取消「${sessionTitle}」的報名嗎？\n若已逾取消期限可能仍需支付費用。`);
     if (!ok) return;
 
@@ -118,115 +123,156 @@ export default function MyRecordsPage() {
         </div>
       )}
 
-      {loading ? (
-        <div className="text-center py-12 bg-white rounded-2xl border border-slate-200 text-xs space-y-2.5 p-6 shadow-sm">
-          <RefreshCw size={24} className="animate-spin text-emerald-600 mx-auto" />
-          <div className="text-sm font-bold text-slate-800">正在讀取資料中，請稍候...</div>
-          <div className="text-slate-400 text-[11px]">正在連線伺服器，即時同步您的個人報名紀錄</div>
-        </div>
-      ) : records.length === 0 ? (
-        <div className="text-center py-12 bg-white rounded-2xl border border-slate-200 text-slate-500 text-sm shadow-sm space-y-1">
-          <div className="font-medium text-slate-700">目前尚無任何報名紀錄</div>
-          <p className="text-xs text-slate-400">您報名或登記備取的零打場次將會顯示在此處</p>
-        </div>
-      ) : (
-        <div className="space-y-4">
-          {records.map((rec) => {
-            const session = rec.session;
-            if (!session) return null;
+      {(() => {
+        // 🛡️ 排除已刪除之場次紀錄 (match_sessions 為 null 或 status 為 deleted)
+        const validRecords = records.filter((rec) => rec.session && rec.session.status !== 'deleted');
 
-            const start = new Date(session.start_time);
-            const end = new Date(session.end_time);
-            const isMain = rec.status === 'main';
+        if (loading) {
+          return (
+            <div className="text-center py-12 bg-white rounded-2xl border border-slate-200 text-xs space-y-2.5 p-6 shadow-sm">
+              <RefreshCw size={24} className="animate-spin text-emerald-600 mx-auto" />
+              <div className="text-sm font-bold text-slate-800">正在讀取資料中，請稍候...</div>
+              <div className="text-slate-400 text-[11px]">正在連線伺服器，即時同步您的個人報名紀錄</div>
+            </div>
+          );
+        }
 
-            return (
-              <div
-                key={rec.id}
-                className={`rounded-2xl p-4 shadow-sm border transition-all ${
-                  rec.hasConflict
-                    ? 'bg-red-50 border-red-300 ring-2 ring-red-400'
-                    : 'bg-white border-slate-200'
-                }`}
-              >
-                {/* 頂部衝突警示條 */}
-                {rec.hasConflict && (
-                  <div className="flex items-center gap-1.5 text-xs text-red-700 font-bold mb-2 pb-2 border-b border-red-200">
-                    <AlertTriangle size={15} />
-                    <span>⚠️ 此場次與其他已報名場次時間重疊衝突！</span>
-                  </div>
-                )}
+        if (validRecords.length === 0) {
+          return (
+            <div className="text-center py-12 bg-white rounded-2xl border border-slate-200 text-slate-500 text-sm shadow-sm space-y-1">
+              <div className="font-medium text-slate-700">目前尚無任何報名紀錄</div>
+              <p className="text-xs text-slate-400">您報名或登記備取的零打場次將會顯示在此處</p>
+            </div>
+          );
+        }
 
-                <div className="flex items-center justify-between mb-2">
-                  <span
-                    className={`text-xs px-2.5 py-0.5 rounded-full font-bold ${
-                      isMain
-                        ? 'bg-emerald-100 text-emerald-800'
-                        : 'bg-amber-100 text-amber-800'
-                    }`}
-                  >
-                    {isMain ? '正取名額' : `備取第 ${rec.waitlist_order} 位`}
-                  </span>
+        return (
+          <div className="space-y-4">
+            {validRecords.map((rec) => {
+              const session = rec.session;
+              if (!session) return null;
 
-                  {/* 繳費狀態標籤 (橘色未付 / 綠色已付) */}
-                  <span
-                    className={`text-xs px-2.5 py-0.5 rounded-full font-bold ${
-                      rec.payment_status === 'paid'
-                        ? 'bg-emerald-600 text-white'
-                        : 'bg-orange-500 text-white'
-                    }`}
-                  >
-                    {rec.payment_status === 'paid' ? '已付款' : '未付款'}
-                  </span>
-                </div>
+              const start = new Date(session.start_time);
+              const end = new Date(session.end_time);
+              const isMain = rec.status === 'main';
+              const isPast = start.getTime() <= Date.now();
+              const isCancelled = session.status === 'cancelled';
 
-                <h3 className="font-bold text-slate-800 text-base mb-2">
-                  {session.title}
-                </h3>
+              return (
+                <div
+                  key={rec.id}
+                  className={`rounded-2xl p-4 shadow-sm border transition-all ${
+                    rec.hasConflict
+                      ? 'bg-red-50 border-red-300 ring-2 ring-red-400'
+                      : isPast
+                      ? 'bg-slate-50/80 border-slate-200 opacity-90'
+                      : 'bg-white border-slate-200'
+                  }`}
+                >
+                  {/* 頂部衝突警示條 */}
+                  {rec.hasConflict && !isPast && (
+                    <div className="flex items-center gap-1.5 text-xs text-red-700 font-bold mb-2 pb-2 border-b border-red-200">
+                      <AlertTriangle size={15} />
+                      <span>⚠️ 此場次與其他已報名場次時間重疊衝突！</span>
+                    </div>
+                  )}
 
-                <div className="space-y-1 text-xs text-slate-600">
-                  <div className="flex items-center gap-2">
-                    <User size={14} className="text-emerald-600 shrink-0" />
-                    <span>主揪團主：<strong className="text-slate-700">{session.host_name || '球團團主'}</strong></span>
-                  </div>
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <span
+                        className={`text-xs px-2.5 py-0.5 rounded-full font-bold ${
+                          isMain
+                            ? 'bg-emerald-100 text-emerald-800'
+                            : 'bg-amber-100 text-amber-800'
+                        }`}
+                      >
+                        {isMain ? '正取名額' : `備取第 ${rec.waitlist_order} 位`}
+                      </span>
 
-                  <div className="flex items-center gap-2">
-                    <Clock size={14} className="text-slate-400 shrink-0" />
-                    <span>
-                      {start.toLocaleDateString('zh-TW', { timeZone: 'Asia/Taipei', weekday: 'short', month: 'numeric', day: 'numeric' })}{' '}
-                      {start.toLocaleTimeString('zh-TW', { timeZone: 'Asia/Taipei', hour: '2-digit', minute: '2-digit', hour12: false })} -{' '}
-                      {end.toLocaleTimeString('zh-TW', { timeZone: 'Asia/Taipei', hour: '2-digit', minute: '2-digit', hour12: false })}
+                      {isPast && (
+                        <span className="text-xs px-2 py-0.5 rounded-full bg-slate-200/90 text-slate-600 font-bold border border-slate-300">
+                          已結束
+                        </span>
+                      )}
+
+                      {isCancelled && (
+                        <span className="text-xs px-2 py-0.5 rounded-full bg-red-100 text-red-700 font-bold border border-red-200">
+                          🚫 場次已取消
+                        </span>
+                      )}
+                    </div>
+
+                    {/* 繳費狀態標籤 (橘色未付 / 綠色已付) */}
+                    <span
+                      className={`text-xs px-2.5 py-0.5 rounded-full font-bold ${
+                        rec.payment_status === 'paid'
+                          ? 'bg-emerald-600 text-white'
+                          : 'bg-orange-500 text-white'
+                      }`}
+                    >
+                      {rec.payment_status === 'paid' ? '已付款' : '未付款'}
                     </span>
                   </div>
 
-                  <div className="flex items-center gap-2">
-                    <MapPin size={14} className="text-slate-400 shrink-0" />
-                    <span>{session.location}</span>
+                  <h3 className="font-bold text-slate-800 text-base mb-2">
+                    {session.title}
+                  </h3>
+
+                  <div className="space-y-1 text-xs text-slate-600">
+                    <div className="flex items-center gap-2">
+                      <User size={14} className="text-emerald-600 shrink-0" />
+                      <span>主揪團主：<strong className="text-slate-700">{session.host_name || '球團團主'}</strong></span>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <Clock size={14} className="text-slate-400 shrink-0" />
+                      <span>
+                        {start.toLocaleDateString('zh-TW', { timeZone: 'Asia/Taipei', weekday: 'short', month: 'numeric', day: 'numeric' })}{' '}
+                        {start.toLocaleTimeString('zh-TW', { timeZone: 'Asia/Taipei', hour: '2-digit', minute: '2-digit', hour12: false })} -{' '}
+                        {end.toLocaleTimeString('zh-TW', { timeZone: 'Asia/Taipei', hour: '2-digit', minute: '2-digit', hour12: false })}
+                      </span>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <MapPin size={14} className="text-slate-400 shrink-0" />
+                      <span>{session.location}</span>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <Calendar size={14} className="text-slate-400 shrink-0" />
+                      <span>
+                        應付費用：${session.fee * (rec.party_size || 1)} ({rec.party_size} 人)
+                      </span>
+                    </div>
                   </div>
 
-                  <div className="flex items-center gap-2">
-                    <Calendar size={14} className="text-slate-400 shrink-0" />
-                    <span>
-                      應付費用：${session.fee * (rec.party_size || 1)} ({rec.party_size} 人)
-                    </span>
+                  {/* 取消報名操作按鈕 (開打時間已過或已取消場次不提供線上取消按鈕) */}
+                  <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between">
+                    <div className="text-[11px] text-slate-400">
+                      {isPast
+                        ? '⏰ 開打時間已過，紀錄留存供查對'
+                        : isCancelled
+                        ? '團主已取消此場次'
+                        : '如不克前往請及早取消以利候補遞補'}
+                    </div>
+
+                    {!isPast && !isCancelled && (
+                      <button
+                        onClick={() => handleCancel(rec.id, session.title, session.start_time)}
+                        disabled={cancellingId === rec.id}
+                        className="flex items-center gap-1 text-xs text-red-600 hover:text-red-700 font-semibold px-3 py-1.5 rounded-lg border border-red-200 hover:bg-red-50 transition-colors disabled:opacity-50"
+                      >
+                        <XCircle size={14} />
+                        {cancellingId === rec.id ? '取消中...' : '取消報名'}
+                      </button>
+                    )}
                   </div>
                 </div>
-
-                {/* 取消報名操作按鈕 */}
-                <div className="mt-4 pt-3 border-t border-slate-100 flex justify-end">
-                  <button
-                    onClick={() => handleCancel(rec.id, session.title)}
-                    disabled={cancellingId === rec.id}
-                    className="flex items-center gap-1 text-xs text-red-600 hover:text-red-700 font-semibold px-3 py-1.5 rounded-lg border border-red-200 hover:bg-red-50 transition-colors disabled:opacity-50"
-                  >
-                    <XCircle size={14} />
-                    {cancellingId === rec.id ? '取消中...' : '取消報名'}
-                  </button>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      )}
+              );
+            })}
+          </div>
+        );
+      })()}
     </main>
   );
 }
