@@ -167,6 +167,17 @@ export async function GET(req: NextRequest) {
     .in('line_user_id', hostUserIds);
   const hostMap = new Map((hostUsers || []).map((u) => [u.line_user_id, u.display_name]));
 
+  // 取得場次所屬群組資料以附加群組標籤
+  const groupIds = Array.from(new Set(activeRecords.map((r) => r.session?.group_id).filter(Boolean)));
+  let groupMap = new Map<string, string>();
+  if (groupIds.length > 0) {
+    const { data: dbGroups } = await supabaseAdmin
+      .from('groups')
+      .select('group_id, group_name')
+      .in('group_id', groupIds);
+    groupMap = new Map((dbGroups || []).map((g) => [g.group_id, g.group_name || '羽球社團']));
+  }
+
   // 檢查是否有舊的預設名稱 '團主' / '球友'，自動補齊真實 LINE 暱稱
   for (const u of (hostUsers || [])) {
     if (u.display_name === '團主' || u.display_name === '球友' || !u.display_name) {
@@ -211,6 +222,7 @@ export async function GET(req: NextRequest) {
       ? {
           ...rec.session,
           host_name: hostMap.get(rec.session.host_user_id) || '球團主揪',
+          group_name: rec.session.group_id ? (groupMap.get(rec.session.group_id) || '羽球社團') : '全域公開場次',
         }
       : undefined;
 

@@ -66,6 +66,7 @@ export interface MatchSession {
   host_picture_url?: string | null;
   current_players?: number;
   waitlist_count?: number;
+  group_name?: string;
   group?: Group;
 }
 

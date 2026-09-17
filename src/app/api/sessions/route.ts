@@ -62,16 +62,25 @@ export async function GET(req: NextRequest) {
       query = query.eq('host_user_id', hostId);
     }
 
-    // 若有提供群組，顯示該群專屬場次 + 全域公開場次 (group_id 為 null)
-    if (groupId) {
-      query = query.or(`group_id.eq.${groupId},group_id.is.null`);
-    }
-
-    // 若為球友報名模式 (upcomingOnly)，僅撈取尚未開打且開放報名/候補之場次
+    // 若為球友報名模式 (upcomingOnly)：
     if (upcomingOnly) {
+      if (groupId) {
+        // 在特定群組中，僅顯示該群專屬場次 + 全域公開場次 (group_id 為 null)
+        query = query.or(`group_id.eq.${groupId},group_id.is.null`);
+      } else {
+        // 🛡️ 嚴格隔離破口修補：若無提供 groupId（從官方帳號私訊或圖文選單進入），
+        // 絕對不洩漏任何特定群組的專屬場次，僅顯示全域公開場次 (group_id 為 null)
+        query = query.is('group_id', null);
+      }
+
       query = query.gt('start_time', new Date().toISOString());
       if (!status) {
         query = query.in('status', ['open', 'full']);
+      }
+    } else {
+      // 團主後台管理模式
+      if (groupId) {
+        query = query.or(`group_id.eq.${groupId},group_id.is.null`);
       }
     }
 
@@ -169,6 +178,17 @@ export async function GET(req: NextRequest) {
 
     const hostMap = new Map((hostUsers || []).map((u) => [u.line_user_id, u]));
 
+    // 取得所有場次所屬之群組資料以附加群組名稱標籤
+    const groupIds = Array.from(new Set(sessions.map((s) => s.group_id).filter(Boolean)));
+    let groupMap = new Map<string, string>();
+    if (groupIds.length > 0) {
+      const { data: dbGroups } = await supabaseAdmin
+        .from('groups')
+        .select('group_id, group_name')
+        .in('group_id', groupIds);
+      groupMap = new Map((dbGroups || []).map((g) => [g.group_id, g.group_name || '羽球社團']));
+    }
+
     // 檢查是否有舊的預設名稱 '團主' / '球友'，自動補齊真實 LINE 暱稱並回寫
     for (const u of (hostUsers || [])) {
       if (u.display_name === '團主' || u.display_name === '球友' || !u.display_name) {
@@ -200,12 +220,14 @@ export async function GET(req: NextRequest) {
         .filter((r) => r.status === 'waitlist')
         .reduce((sum, r) => sum + (r.party_size || 1), 0);
       const host = hostMap.get(session.host_user_id);
+      const groupName = session.group_id ? (groupMap.get(session.group_id) || '羽球社團') : undefined;
 
       return {
         ...session,
         is_roster_public: session.is_roster_public ?? true,
         host_name: host?.display_name || '球團主揪',
         host_picture_url: host?.picture_url || null,
+        group_name: groupName,
         current_players: mainCount,
         waitlist_count: waitlistCount,
       };

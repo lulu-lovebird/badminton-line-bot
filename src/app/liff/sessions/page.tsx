@@ -257,6 +257,19 @@ function SessionListContent() {
         </div>
       </div>
 
+      {/* 私訊 / 無群組 ID 進入時的提醒橫幅 */}
+      {!currentGroupId && (
+        <div className="bg-amber-50 border border-amber-200 text-amber-900 rounded-xl p-3 mb-4 text-xs flex items-start gap-2 shadow-sm">
+          <AlertCircle size={16} className="text-amber-600 shrink-0 mt-0.5" />
+          <div className="space-y-0.5">
+            <span className="font-bold">溫馨提醒：各羽球社團專屬場次限於群組內報名</span>
+            <p className="text-amber-800/90 text-[11px] leading-relaxed">
+              若您要報名特定球團/LINE 群組開立的零打場次，請直接前往該羽球 LINE 群組點擊公告或輸入「我要報名」進入！
+            </p>
+          </div>
+        </div>
+      )}
+
       {/* 場次列表 */}
       {loading ? (
         <div className="text-center py-12 bg-white rounded-2xl border border-slate-200 text-xs space-y-2.5 p-6 shadow-sm">
@@ -278,18 +291,6 @@ function SessionListContent() {
               <RefreshCw size={13} />
               重新整理
             </button>
-            {currentGroupId && (
-              <button
-                onClick={() => {
-                  setCurrentGroupId('');
-                  fetchSessions(selectedDate, '', true);
-                }}
-                className="px-3 py-1.5 bg-slate-100 text-slate-700 hover:bg-slate-200 rounded-lg text-xs font-medium flex items-center gap-1 transition-all active:scale-95"
-              >
-                <Globe size={13} />
-                查看全域所有場次
-              </button>
-            )}
           </div>
         </div>
       ) : (
@@ -325,6 +326,9 @@ function SessionListContent() {
                     </span>
                     <span className="text-xs px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-800 border border-emerald-200 font-medium">
                       👤 團主：{s.host_name || '球團團主'}
+                    </span>
+                    <span className="text-xs px-2 py-0.5 rounded-full bg-slate-100 text-slate-700 border border-slate-200 font-medium">
+                      🏸 {s.group_name || '全域公開場次'}
                     </span>
                     {s.status === 'cancelled' && (
                       <span className="text-xs px-2 py-0.5 rounded-full bg-red-100 text-red-700 font-bold border border-red-200">

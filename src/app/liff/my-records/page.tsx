@@ -189,6 +189,10 @@ export default function MyRecordsPage() {
                         {isMain ? '正取名額' : `備取第 ${rec.waitlist_order} 位`}
                       </span>
 
+                      <span className="text-xs px-2.5 py-0.5 rounded-full font-bold bg-blue-50 text-blue-700 border border-blue-200">
+                        🏸 {session.group_name || '全域公開場次'}
+                      </span>
+
                       {isPast && (
                         <span className="text-xs px-2 py-0.5 rounded-full bg-slate-200/90 text-slate-600 font-bold border border-slate-300">
                           已結束
