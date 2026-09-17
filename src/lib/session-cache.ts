@@ -51,6 +51,7 @@ export function generateSessionCacheKey(params: {
   status?: string | null;
   hostId?: string | null;
   upcomingOnly?: boolean | null;
+  allowCrossGroup?: boolean | null;
 }): string {
   const g = encodeURIComponent((params.groupId || '').trim() || 'all');
   const sid = encodeURIComponent((params.sessionId || '').trim() || 'all');
@@ -58,7 +59,8 @@ export function generateSessionCacheKey(params: {
   const s = encodeURIComponent((params.status || '').trim() || 'all');
   const h = encodeURIComponent((params.hostId || '').trim() || 'all');
   const u = params.upcomingOnly ? '1' : '0';
-  return `sessions:g=${g}:sid=${sid}:d=${d}:s=${s}:h=${h}:u=${u}`;
+  const c = params.allowCrossGroup ? '1' : '0';
+  return `sessions:g=${g}:sid=${sid}:d=${d}:s=${s}:h=${h}:u=${u}:c=${c}`;
 }
 
 export interface CacheLookupResult<T> {

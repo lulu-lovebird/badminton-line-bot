@@ -34,6 +34,9 @@ function SessionListContent() {
 
   const { userProfile, idToken } = useLiff();
 
+  // 是否開放跨社團查看場次 (支援 ALLOW_CROSS_GROUP_SESSIONS 與 NEXT_PUBLIC_ALLOW_CROSS_GROUP_SESSIONS，預設 false 嚴格隔離)
+  const isCrossGroupAllowed = (process.env.NEXT_PUBLIC_ALLOW_CROSS_GROUP_SESSIONS || 'false').toLowerCase().trim() === 'true';
+
   // 🛡️ 篩選僅開放報名之未來場次：未過開打時間、非停用、非已刪除
   const now = Date.now();
   const availableSessions = (sessions || []).filter((s) => {
@@ -258,8 +261,8 @@ function SessionListContent() {
         </div>
       </div>
 
-      {/* 私訊 / 無群組 ID 進入時的提醒橫幅 */}
-      {!currentGroupId && (
+      {/* 私訊 / 無群組 ID 進入時的提醒橫幅 (僅在嚴格隔離封閉模式下顯示) */}
+      {!currentGroupId && !isCrossGroupAllowed && (
         <div className="bg-amber-50 border border-amber-200 text-amber-900 rounded-xl p-3 mb-4 text-xs flex items-start gap-2 shadow-sm">
           <AlertCircle size={16} className="text-amber-600 shrink-0 mt-0.5" />
           <div className="space-y-0.5">
@@ -292,6 +295,18 @@ function SessionListContent() {
               <RefreshCw size={13} />
               重新整理
             </button>
+            {currentGroupId && isCrossGroupAllowed && (
+              <button
+                onClick={() => {
+                  setCurrentGroupId('');
+                  fetchSessions(selectedDate, '', true);
+                }}
+                className="px-3 py-1.5 bg-slate-100 text-slate-700 hover:bg-slate-200 rounded-lg text-xs font-medium flex items-center gap-1 transition-all active:scale-95"
+              >
+                <Globe size={13} />
+                查看全域所有場次
+              </button>
+            )}
           </div>
         </div>
       ) : (
