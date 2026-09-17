@@ -2204,7 +2204,7 @@ function AdminDashboardContent() {
               <button
                 type="button"
                 onClick={() => {
-                  const url = getSessionLiffUrl(shareModalSession.id);
+                  const url = getSessionLiffUrl(shareModalSession);
                   navigator.clipboard.writeText(url);
                   setCopyToast('✓ 已複製報名連結！可直接貼在 LINE 群組');
                 }}

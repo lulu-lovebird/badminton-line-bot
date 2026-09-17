@@ -23,6 +23,7 @@ export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   // 1. 參數正規化 (去除多餘空白以防 Cache Key 碰撞)
   const groupId = searchParams.get('groupId')?.trim() || null;
+  const sessionId = searchParams.get('sessionId')?.trim() || null;
   const date = searchParams.get('date')?.trim() || null;
   const status = searchParams.get('status')?.trim() || null;
   const hostId = searchParams.get('hostId')?.trim() || null;
@@ -31,7 +32,7 @@ export async function GET(req: NextRequest) {
     searchParams.get('refresh') === 'true' ||
     req.headers.get('cache-control')?.includes('no-cache');
 
-  const cacheKey = generateSessionCacheKey({ groupId, date, status, hostId, upcomingOnly });
+  const cacheKey = generateSessionCacheKey({ groupId, sessionId, date, status, hostId, upcomingOnly });
   const ttl = getCacheTTLSeconds();
 
   // 2. 若非強制刷新，優先檢查記憶體快取 (命中時 0 次 Supabase 連線)
@@ -64,11 +65,17 @@ export async function GET(req: NextRequest) {
 
     // 若為球友報名模式 (upcomingOnly)：
     if (upcomingOnly) {
-      if (groupId) {
+      if (sessionId && groupId) {
+        // 既有特定場次 ID 又在特定群組
+        query = query.or(`group_id.eq.${groupId},group_id.is.null,id.eq.${sessionId}`);
+      } else if (sessionId) {
+        // 球友持有特定場次分享連結點入 (即使無 groupId 亦放行該場次與全域場次)
+        query = query.or(`group_id.is.null,id.eq.${sessionId}`);
+      } else if (groupId) {
         // 在特定群組中，僅顯示該群專屬場次 + 全域公開場次 (group_id 為 null)
         query = query.or(`group_id.eq.${groupId},group_id.is.null`);
       } else {
-        // 🛡️ 嚴格隔離破口修補：若無提供 groupId（從官方帳號私訊或圖文選單進入），
+        // 🛡️ 嚴格隔離破口修補：若無提供 groupId 且無特定 sessionId，
         // 絕對不洩漏任何特定群組的專屬場次，僅顯示全域公開場次 (group_id 為 null)
         query = query.is('group_id', null);
       }

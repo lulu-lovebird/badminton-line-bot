@@ -26,12 +26,15 @@ export function formatTaipeiDate(dateString: string) {
 }
 
 /**
- * 取得報名頁面專屬 LIFF 連結
+ * 取得報名頁面專屬 LIFF 連結 (若場次有 group_id 則一併帶入，確保群組專屬場次在嚴格隔離下依然能正確載入)
  */
-export function getSessionLiffUrl(sessionId: string, liffBaseUrl?: string): string {
+export function getSessionLiffUrl(sessionOrId: string | MatchSession, liffBaseUrl?: string): string {
   const base = liffBaseUrl || process.env.LINE_LIFF_URL || process.env.NEXT_PUBLIC_LIFF_URL || 'https://liff.line.me/2011571193-7TCyhgGU';
   const cleanBase = base.replace(/\/$/, '');
-  return `${cleanBase}/sessions?sessionId=${sessionId}`;
+  const sessionId = typeof sessionOrId === 'string' ? sessionOrId : sessionOrId.id;
+  const groupId = typeof sessionOrId === 'object' && sessionOrId.group_id ? sessionOrId.group_id : null;
+  const groupParam = groupId ? `&groupId=${encodeURIComponent(groupId)}` : '';
+  return `${cleanBase}/sessions?sessionId=${sessionId}${groupParam}`;
 }
 
 /**
@@ -42,7 +45,7 @@ export function formatSessionAnnouncement(session: MatchSession, liffBaseUrl?: s
   const e = formatTaipeiDate(session.end_time);
   const timeStr = `${s.month}/${s.day} (${s.weekday}) ${s.hours}:${s.mins} - ${e.hours}:${e.mins}`;
   const matchTypeStr = session.match_type === 'single' ? '單打' : session.match_type === 'any' ? '不限' : '雙打';
-  const registerUrl = getSessionLiffUrl(session.id, liffBaseUrl);
+  const registerUrl = getSessionLiffUrl(session, liffBaseUrl);
 
   const lines = [
     `🏸 【${matchTypeStr}零打】${session.title}`,
@@ -74,7 +77,7 @@ export function createSessionFlexMessage(session: MatchSession, liffBaseUrl?: st
   const headerColor = isFull ? '#1B5E20' : '#2E7D32';
   const statusBadge = isFull ? '額滿 (可備取)' : '熱烈招募中';
 
-  const registerUrl = getSessionLiffUrl(session.id, liffBaseUrl);
+  const registerUrl = getSessionLiffUrl(session, liffBaseUrl);
 
   return {
     type: 'flex' as const,

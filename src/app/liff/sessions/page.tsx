@@ -49,6 +49,7 @@ function SessionListContent() {
     try {
       const params = new URLSearchParams();
       params.append('upcomingOnly', 'true');
+      if (targetSessionId) params.append('sessionId', targetSessionId);
       if (groupFilter) params.append('groupId', groupFilter);
       if (dateFilter) params.append('date', dateFilter);
       if (isManualRefresh) {
