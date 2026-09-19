@@ -185,6 +185,12 @@ function AdminDashboardContent() {
   const [loadingMembers, setLoadingMembers] = useState(false);
   const [isRegularAccordionOpen, setIsRegularAccordionOpen] = useState(true);
   const [prefillRegularIds, setPrefillRegularIds] = useState<string[]>([]);
+  
+  // 方案 A: 歷史球友下拉快選
+  const [historyPlayers, setHistoryPlayers] = useState<{ user_id: string; display_name: string; picture_url?: string; count: number }[]>([]);
+  const [loadingHistory, setLoadingHistory] = useState(false);
+  const [memberInputMode, setMemberInputMode] = useState<'select' | 'manual'>('select');
+
   // 固定咖管理彈窗/表單狀態
   const [newMemberUserId, setNewMemberUserId] = useState('');
   const [newMemberIsRegular, setNewMemberIsRegular] = useState(true);
@@ -193,6 +199,15 @@ function AdminDashboardContent() {
   const [newMemberValidUntil, setNewMemberValidUntil] = useState('');
   const [newMemberNotes, setNewMemberNotes] = useState('');
   const [isSavingMember, setIsSavingMember] = useState(false);
+
+  // 方案 B: 場次名冊 ⭐ 一鍵加入固定咖彈窗狀態
+  const [fastRegularPlayer, setFastRegularPlayer] = useState<{ user_id: string; player_name: string } | null>(null);
+  const [fastHasDiscount, setFastHasDiscount] = useState(false);
+  const [fastDiscountFee, setFastDiscountFee] = useState<number>(180);
+  const [isSavingFastRegular, setIsSavingFastRegular] = useState(false);
+
+  // 方案 C: 邀請連結複製狀態
+  const [copiedInvite, setCopiedInvite] = useState(false);
 
   const [autoPushToGroup, setAutoPushToGroup] = useState(false);
   const [liffInstance, setLiffInstance] = useState<any>(null);
@@ -718,12 +733,92 @@ function AdminDashboardContent() {
     }
   }
 
-  // 切換群組時自動載入該群固定咖
+  // 方案 A: 載入本群歷史報名球友清單
+  async function fetchHistoryPlayers(targetGroupId: string) {
+    if (!targetGroupId) {
+      setHistoryPlayers([]);
+      return;
+    }
+    setLoadingHistory(true);
+    try {
+      const res = await fetch(`/api/groups/members?groupId=${targetGroupId}&action=history_players`);
+      if (res.ok) {
+        const list = await res.json();
+        setHistoryPlayers(Array.isArray(list) ? list : []);
+      }
+    } catch (e) {
+      console.error('載入歷史球友失敗:', e);
+    } finally {
+      setLoadingHistory(false);
+    }
+  }
+
+  // 切換群組時自動載入該群固定咖與歷史球友
   useEffect(() => {
     if (form.group_id) {
       fetchGroupMembers(form.group_id);
+      fetchHistoryPlayers(form.group_id);
     }
   }, [form.group_id]);
+
+  // 方案 B: 快速設為固定咖
+  async function handleFastSaveRegular() {
+    if (!selectedSession?.group_id || !fastRegularPlayer?.user_id) return;
+    setIsSavingFastRegular(true);
+    try {
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      if (idToken) headers['Authorization'] = `Bearer ${idToken}`;
+      else if (userProfile?.line_user_id) headers['x-test-user-id'] = userProfile.line_user_id;
+
+      const res = await fetch('/api/groups/members', {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          group_id: selectedSession.group_id,
+          user_id: fastRegularPlayer.user_id,
+          display_name: fastRegularPlayer.player_name,
+          is_regular: true,
+          has_seasonal_discount: fastHasDiscount,
+          seasonal_fee: fastHasDiscount ? Number(fastDiscountFee) : null,
+          notes: '由場次名單一鍵設為固定咖',
+        }),
+      });
+
+      if (res.ok) {
+        alert(`🎉 已成功將「${fastRegularPlayer.player_name}」加入固定咖名單！`);
+        setFastRegularPlayer(null);
+        if (form.group_id) fetchGroupMembers(form.group_id);
+      } else {
+        const err = await res.json();
+        alert(err.error || '設定失敗');
+      }
+    } catch (e) {
+      alert((e as Error).message || '連線失敗');
+    } finally {
+      setIsSavingFastRegular(false);
+    }
+  }
+
+  // 方案 C: 複製固定咖登記邀請連結
+  function handleCopyInviteLink() {
+    if (!form.group_id) {
+      alert('請先選擇群組！');
+      return;
+    }
+    const currentGroup = availableGroups.find((g) => g.group_id === form.group_id);
+    const groupNameStr = currentGroup?.group_name || '羽球社團';
+    const origin = typeof window !== 'undefined' ? window.location.origin : '';
+    const inviteUrl = `${origin}/liff/join-regular?groupId=${encodeURIComponent(form.group_id)}&groupName=${encodeURIComponent(groupNameStr)}`;
+    
+    const text = `🏸 【${groupNameStr}】固定咖專屬登記邀請\n點擊下方專屬連結，自動以 LINE 身分加入本社團固定咖名單，下週開團免搶票自動保留名額！\n👉 ${inviteUrl}`;
+    
+    navigator.clipboard.writeText(text).then(() => {
+      setCopiedInvite(true);
+      setTimeout(() => setCopiedInvite(false), 3000);
+    }).catch(() => {
+      prompt('請手動複製邀請連結：', text);
+    });
+  }
 
   function handleTogglePrefill(userId: string) {
     setPrefillRegularIds((prev) =>
@@ -1557,23 +1652,95 @@ function AdminDashboardContent() {
               </select>
             </div>
 
-            {/* 新增 / 設定固定咖表單 */}
+            {/* 方案 C: 邀請連結產生與複製專區 */}
+            <div className="p-3.5 bg-emerald-50/70 border border-emerald-200 rounded-xl space-y-2">
+              <div className="flex items-center justify-between">
+                <div className="font-bold text-xs text-emerald-900 flex items-center gap-1.5">
+                  <Share2 size={13} className="text-emerald-700" />
+                  <span>方案 C: 固定咖自主登記專屬邀請連結</span>
+                </div>
+                {copiedInvite && (
+                  <span className="text-[10px] bg-emerald-600 text-white px-2 py-0.5 rounded-full font-bold animate-pulse">
+                    ✓ 已複製邀請文案！
+                  </span>
+                )}
+              </div>
+              <p className="text-[11px] text-emerald-800/80 leading-relaxed">
+                將專屬連結發送到 LINE 大群，球友點開後會自動透過 LIFF 讀取其身分一鍵登記為固定咖，<strong>團主與球友皆免查、免填 LINE ID！</strong>
+              </p>
+              <button
+                type="button"
+                onClick={handleCopyInviteLink}
+                className="w-full py-2 bg-emerald-600 hover:bg-emerald-700 active:scale-98 text-white rounded-lg font-bold text-xs shadow-xs flex items-center justify-center gap-1.5 transition-all"
+              >
+                <Copy size={12} />
+                <span>複製專屬登記邀請連結與文案</span>
+              </button>
+            </div>
+
+            {/* 新增 / 設定固定咖表單 (支援方案 A: 歷史球友下拉快選) */}
             <form onSubmit={handleSaveMember} className="p-3.5 bg-slate-50 border border-slate-200 rounded-xl space-y-2.5 text-xs">
-              <div className="font-bold text-slate-700 flex items-center gap-1.5">
-                <UserPlus size={14} className="text-emerald-600" />
-                <span>新增或設定群組固定咖</span>
+              <div className="flex items-center justify-between">
+                <div className="font-bold text-slate-700 flex items-center gap-1.5">
+                  <UserPlus size={14} className="text-emerald-600" />
+                  <span>新增或設定群組固定咖</span>
+                </div>
+                {/* 切換手動填寫 / 歷史選單 */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMemberInputMode(memberInputMode === 'select' ? 'manual' : 'select');
+                    setNewMemberUserId('');
+                  }}
+                  className="text-[11px] text-blue-600 hover:underline font-medium"
+                >
+                  {memberInputMode === 'select' ? '✍️ 手動輸入 LINE ID' : '📋 切換為歷史球友選單'}
+                </button>
               </div>
-              <div>
-                <label className="text-[11px] text-slate-500 font-medium">球友 LINE User ID (以 U 開頭 33 碼字串)</label>
-                <input
-                  type="text"
-                  required
-                  placeholder="例: U1234567890abcdef1234567890abcdef"
-                  value={newMemberUserId}
-                  onChange={(e) => setNewMemberUserId(e.target.value)}
-                  className="w-full text-xs border rounded-lg p-2 mt-1 bg-white outline-none focus:border-emerald-500"
-                />
-              </div>
+
+              {/* 方案 A: 歷史球友下拉快選 */}
+              {memberInputMode === 'select' ? (
+                <div>
+                  <div className="flex items-center justify-between">
+                    <label className="text-[11px] text-slate-600 font-bold">
+                      方案 A: 選擇歷史報名球友 ({historyPlayers.length} 位)
+                    </label>
+                    {loadingHistory && <span className="text-[10px] text-slate-400">載入中...</span>}
+                  </div>
+                  <select
+                    value={newMemberUserId}
+                    onChange={(e) => setNewMemberUserId(e.target.value)}
+                    className="w-full text-xs border border-slate-300 rounded-lg p-2 mt-1 bg-white outline-none focus:border-emerald-500 font-medium"
+                  >
+                    <option value="">-- 請選擇球友 (依歷史出席次數排序) --</option>
+                    {historyPlayers.map((p) => {
+                      const isAlreadyRegular = groupMembers.some((m) => m.user_id === p.user_id && m.is_regular);
+                      return (
+                        <option key={p.user_id} value={p.user_id}>
+                          {p.display_name} {p.count > 0 ? `(累計出席 ${p.count} 次)` : ''} {isAlreadyRegular ? '★ 已是固定咖' : ''}
+                        </option>
+                      );
+                    })}
+                  </select>
+                  {historyPlayers.length === 0 && !loadingHistory && (
+                    <p className="text-[10px] text-slate-400 mt-1">
+                      本社團尚無歷史報名球友，可切換為「手動輸入」或使用下方「方案 C 邀請連結」。
+                    </p>
+                  )}
+                </div>
+              ) : (
+                <div>
+                  <label className="text-[11px] text-slate-500 font-medium">球友 LINE User ID (以 U 開頭 33 碼字串)</label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="例: U1234567890abcdef1234567890abcdef"
+                    value={newMemberUserId}
+                    onChange={(e) => setNewMemberUserId(e.target.value)}
+                    className="w-full text-xs border rounded-lg p-2 mt-1 bg-white outline-none focus:border-emerald-500 font-mono"
+                  />
+                </div>
+              )}
               <div className="grid grid-cols-2 gap-2">
                 <label className="flex items-center gap-1.5 cursor-pointer p-2 bg-white rounded-lg border border-slate-200">
                   <input
@@ -2061,31 +2228,121 @@ function AdminDashboardContent() {
                           </div>
                         </div>
 
-                        <div className="flex items-center gap-2">
-                          <button
-                            onClick={() => togglePayment(r)}
-                            className={`text-xs px-2.5 py-1 rounded-full font-bold transition-all shadow-sm ${
-                              r.payment_status === 'paid'
-                                ? 'bg-emerald-600 text-white hover:bg-emerald-700'
-                                : 'bg-orange-500 text-white hover:bg-orange-600'
-                            }`}
-                          >
-                            {r.payment_status === 'paid' ? '✓ 已付款' : '待付款'}
-                          </button>
+                          <div className="flex items-center gap-1.5">
+                            {/* 方案 B: 場次名單一鍵設為固定咖 (排除已是固定咖或代報名) */}
+                            {selectedSession.group_id && !r.is_regular && !r.user_id.startsWith('proxy_') && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setFastRegularPlayer({ user_id: r.user_id, player_name: r.player_name });
+                                  setFastHasDiscount(false);
+                                  setFastDiscountFee(selectedSession.seasonal_fee || 180);
+                                }}
+                                className="text-[11px] px-2 py-1 bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-300 rounded-lg font-bold flex items-center gap-0.5 transition shadow-2xs"
+                                title="將此球友加入本社團固定咖名單"
+                              >
+                                <Star size={11} className="text-amber-600 fill-amber-500" />
+                                <span>設為固定咖</span>
+                              </button>
+                            )}
 
-                          <button
-                            onClick={() => handleRemovePlayer(r.id)}
-                            className="text-[11px] text-red-500 hover:text-red-700 underline px-1"
-                          >
-                            移除
-                          </button>
+                            <button
+                              onClick={() => togglePayment(r)}
+                              className={`text-xs px-2.5 py-1 rounded-full font-bold transition-all shadow-sm ${
+                                r.payment_status === 'paid'
+                                  ? 'bg-emerald-600 text-white hover:bg-emerald-700'
+                                  : 'bg-orange-500 text-white hover:bg-orange-600'
+                              }`}
+                            >
+                              {r.payment_status === 'paid' ? '✓ 已付款' : '待付款'}
+                            </button>
+
+                            <button
+                              onClick={() => handleRemovePlayer(r.id)}
+                              className="text-[11px] text-red-500 hover:text-red-700 underline px-1"
+                            >
+                              移除
+                            </button>
+                          </div>
                         </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* 方案 B: 快速設為固定咖確認彈窗 */}
+                {fastRegularPlayer && (
+                  <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 backdrop-blur-xs">
+                    <div className="bg-white rounded-2xl max-w-sm w-full p-5 shadow-xl border border-slate-200 space-y-4 animate-in fade-in zoom-in-95">
+                      <div className="flex items-center justify-between border-b pb-2.5">
+                        <div className="font-bold text-sm text-slate-800 flex items-center gap-1.5">
+                          <Star size={16} className="text-amber-500 fill-amber-500" />
+                          <span>設為本社團固定咖</span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setFastRegularPlayer(null)}
+                          className="text-slate-400 hover:text-slate-600 p-1"
+                        >
+                          <X size={16} />
+                        </button>
                       </div>
-                    ))}
+
+                      <div className="space-y-3 text-xs">
+                        <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl">
+                          <div className="text-[11px] text-amber-800">目標球友：</div>
+                          <div className="font-bold text-slate-800 text-sm mt-0.5">{fastRegularPlayer.player_name}</div>
+                          <div className="text-[10px] text-slate-400 font-mono mt-0.5">ID: {fastRegularPlayer.user_id}</div>
+                        </div>
+
+                        <label className="flex items-center gap-2 p-2.5 bg-slate-50 rounded-xl border border-slate-200 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={fastHasDiscount}
+                            onChange={(e) => setFastHasDiscount(e.target.checked)}
+                            className="rounded text-amber-600 focus:ring-amber-500"
+                          />
+                          <span className="font-bold text-slate-700">同步享有季打單場優惠價</span>
+                        </label>
+
+                        {fastHasDiscount && (
+                          <div>
+                            <label className="text-[11px] text-slate-500 font-medium">季打每場優惠收費 ($)</label>
+                            <input
+                              type="number"
+                              value={fastDiscountFee}
+                              onChange={(e) => setFastDiscountFee(Number(e.target.value))}
+                              className="w-full text-xs border rounded-lg p-2 mt-1 bg-white outline-none focus:border-amber-500 font-bold"
+                            />
+                          </div>
+                        )}
+
+                        <p className="text-[11px] text-slate-500 leading-relaxed">
+                          加入固定咖後，下次開團系統將自動預載此球友為正取名額，無需每週搶票！
+                        </p>
+                      </div>
+
+                      <div className="flex items-center gap-2 pt-1">
+                        <button
+                          type="button"
+                          onClick={() => setFastRegularPlayer(null)}
+                          className="flex-1 py-2 rounded-xl border border-slate-200 text-xs font-bold text-slate-600 hover:bg-slate-50"
+                        >
+                          取消
+                        </button>
+                        <button
+                          type="button"
+                          disabled={isSavingFastRegular}
+                          onClick={handleFastSaveRegular}
+                          className="flex-1 py-2 rounded-xl bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold shadow-xs disabled:opacity-50 transition"
+                        >
+                          {isSavingFastRegular ? '儲存中...' : '確認加入固定咖'}
+                        </button>
+                      </div>
+                    </div>
                   </div>
                 )}
               </div>
-            </div>
           )}
 
           {/* Tab 2: ⚙️ 場次設定與修改 */}
