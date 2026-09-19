@@ -3,8 +3,8 @@
 import React, { useState, useEffect, useMemo, Suspense } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
-import { PlusCircle, Users, CheckCircle, Clock, Calendar, MapPin, Send, AlertCircle, RefreshCw, ShieldAlert, Key, Copy, Shield, UserPlus, FileText, User, Share2, Pencil, X, Ban, Trash2, Settings } from 'lucide-react';
-import { MatchSession, Registration } from '@/types/database';
+import { PlusCircle, Users, CheckCircle, Clock, Calendar, MapPin, Send, AlertCircle, RefreshCw, ShieldAlert, Key, Copy, Shield, UserPlus, FileText, User, Share2, Pencil, X, Ban, Trash2, Settings, Star, ChevronDown, ChevronUp, UserCheck } from 'lucide-react';
+import { MatchSession, Registration, GroupMembership } from '@/types/database';
 import { initLiff } from '@/lib/liff-client';
 import { getSessionLiffUrl, formatSessionAnnouncement, shareSessionViaTargetPicker } from '@/lib/share-utils';
 
@@ -105,7 +105,7 @@ function AdminDashboardContent() {
   const searchParams = useSearchParams();
   const urlGroupId = searchParams.get('groupId') || '';
 
-  const [activeTab, setActiveTab] = useState<'sessions' | 'create'>('sessions');
+  const [activeTab, setActiveTab] = useState<'sessions' | 'create' | 'members'>('sessions');
   const [sessions, setSessions] = useState<MatchSession[]>([]);
   const [selectedSession, setSelectedSession] = useState<MatchSession | null>(null);
   const [registrations, setRegistrations] = useState<Registration[]>([]);
@@ -175,9 +175,24 @@ function AdminDashboardContent() {
     level_requirement: '初中級 (4~7級)',
     shuttlecock: '勝利比賽球 (綠標)',
     fee: 200,
+    seasonal_fee: 180,
     notes: '含空調，請自備球拍與乾淨球鞋',
     is_roster_public: true,
   });
+
+  // 群組固定咖與季打會員狀態
+  const [groupMembers, setGroupMembers] = useState<GroupMembership[]>([]);
+  const [loadingMembers, setLoadingMembers] = useState(false);
+  const [isRegularAccordionOpen, setIsRegularAccordionOpen] = useState(true);
+  const [prefillRegularIds, setPrefillRegularIds] = useState<string[]>([]);
+  // 固定咖管理彈窗/表單狀態
+  const [newMemberUserId, setNewMemberUserId] = useState('');
+  const [newMemberIsRegular, setNewMemberIsRegular] = useState(true);
+  const [newMemberHasDiscount, setNewMemberHasDiscount] = useState(false);
+  const [newMemberDiscountFee, setNewMemberDiscountFee] = useState<number>(180);
+  const [newMemberValidUntil, setNewMemberValidUntil] = useState('');
+  const [newMemberNotes, setNewMemberNotes] = useState('');
+  const [isSavingMember, setIsSavingMember] = useState(false);
 
   const [autoPushToGroup, setAutoPushToGroup] = useState(false);
   const [liffInstance, setLiffInstance] = useState<any>(null);
@@ -205,6 +220,7 @@ function AdminDashboardContent() {
       level_requirement: s.level_requirement || '初中級 (4~7級)',
       shuttlecock: s.shuttlecock || '勝利比賽球 (綠標)',
       fee: s.fee || 200,
+      seasonal_fee: s.seasonal_fee ?? 180,
       notes: s.notes || '含空調，請自備球拍與乾淨球鞋',
       is_roster_public: s.is_roster_public ?? true,
     });
@@ -678,6 +694,106 @@ function AdminDashboardContent() {
     }
   }
 
+  // 載入指定群組之固定咖與季打清單
+  async function fetchGroupMembers(targetGroupId: string) {
+    if (!targetGroupId) {
+      setGroupMembers([]);
+      setPrefillRegularIds([]);
+      return;
+    }
+    setLoadingMembers(true);
+    try {
+      const res = await fetch(`/api/groups/members?groupId=${targetGroupId}`);
+      if (res.ok) {
+        const list: GroupMembership[] = await res.json();
+        setGroupMembers(Array.isArray(list) ? list : []);
+        // 開團時預設自動勾選所有 is_regular === true 的固定咖
+        const regulars = (list || []).filter((m) => m.is_regular).map((m) => m.user_id);
+        setPrefillRegularIds(regulars);
+      }
+    } catch (e) {
+      console.error('載入群組成員異常:', e);
+    } finally {
+      setLoadingMembers(false);
+    }
+  }
+
+  // 切換群組時自動載入該群固定咖
+  useEffect(() => {
+    if (form.group_id) {
+      fetchGroupMembers(form.group_id);
+    }
+  }, [form.group_id]);
+
+  function handleTogglePrefill(userId: string) {
+    setPrefillRegularIds((prev) =>
+      prev.includes(userId) ? prev.filter((id) => id !== userId) : [...prev, userId]
+    );
+  }
+
+  async function handleSaveMember(e: React.FormEvent) {
+    e.preventDefault();
+    if (!form.group_id || !newMemberUserId.trim()) {
+      alert('請先選擇群組並填寫球友 LINE User ID！');
+      return;
+    }
+    setIsSavingMember(true);
+    try {
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      if (idToken) headers['Authorization'] = `Bearer ${idToken}`;
+      else if (userProfile?.line_user_id) headers['x-test-user-id'] = userProfile.line_user_id;
+
+      const res = await fetch('/api/groups/members', {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          group_id: form.group_id,
+          user_id: newMemberUserId.trim(),
+          is_regular: newMemberIsRegular,
+          has_seasonal_discount: newMemberHasDiscount,
+          seasonal_fee: newMemberHasDiscount ? Number(newMemberDiscountFee) : null,
+          valid_until: newMemberValidUntil || null,
+          notes: newMemberNotes.trim() || null,
+        }),
+      });
+      if (res.ok) {
+        alert('🎉 成員設定已成功儲存！');
+        setNewMemberUserId('');
+        setNewMemberNotes('');
+        await fetchGroupMembers(form.group_id);
+      } else {
+        const err = await res.json();
+        alert(err.error || '儲存失敗');
+      }
+    } catch (err: unknown) {
+      alert((err as Error).message || '連線錯誤');
+    } finally {
+      setIsSavingMember(false);
+    }
+  }
+
+  async function handleDeleteMember(membershipId: string) {
+    if (!window.confirm('確定要自固定咖名單中移除此球友嗎？')) return;
+    try {
+      const headers: Record<string, string> = {};
+      if (idToken) headers['Authorization'] = `Bearer ${idToken}`;
+      else if (userProfile?.line_user_id) headers['x-test-user-id'] = userProfile.line_user_id;
+
+      const res = await fetch(`/api/groups/members?id=${membershipId}`, {
+        method: 'DELETE',
+        headers,
+      });
+      if (res.ok) {
+        if (form.group_id) fetchGroupMembers(form.group_id);
+      } else {
+        const err = await res.json();
+        alert(err.error || '刪除失敗');
+      }
+    } catch (err: unknown) {
+      alert((err as Error).message || '刪除失敗');
+    }
+  }
+
   async function handleCreateSession(e: React.FormEvent) {
     e.preventDefault();
     try {
@@ -693,6 +809,7 @@ function AdminDashboardContent() {
           host_user_id: userProfile?.line_user_id || 'host_admin_001',
           host_name: userProfile?.display_name,
           notify_group_id: autoPushToGroup && form.group_id ? form.group_id : undefined,
+          prefilled_user_ids: prefillRegularIds,
         }),
       });
       const data = await res.json();
@@ -892,7 +1009,7 @@ function AdminDashboardContent() {
               : 'text-slate-600 hover:bg-slate-50'
           }`}
         >
-          🏸 場次總覽 & 名單
+          🏸 場次總覽
         </button>
         <button
           onClick={() => setActiveTab('create')}
@@ -902,7 +1019,20 @@ function AdminDashboardContent() {
               : 'text-slate-600 hover:bg-slate-50'
           }`}
         >
-          ➕ 建立新零打場次
+          ➕ 建立新場次
+        </button>
+        <button
+          onClick={() => {
+            setActiveTab('members');
+            setSelectedSession(null);
+          }}
+          className={`flex-1 py-2 rounded-xl text-xs font-bold transition-all ${
+            activeTab === 'members'
+              ? 'bg-emerald-600 text-white shadow'
+              : 'text-slate-600 hover:bg-slate-50'
+          }`}
+        >
+          👥 固定咖管理
         </button>
       </div>
 
@@ -996,7 +1126,7 @@ function AdminDashboardContent() {
             />
           </div>
 
-          <div className="grid grid-cols-2 gap-2">
+          <div className="grid grid-cols-3 gap-2">
             <div>
               <label className="text-xs font-semibold text-slate-600">型式</label>
               <select
@@ -1016,6 +1146,16 @@ function AdminDashboardContent() {
                 value={form.fee}
                 onChange={(e) => setForm({ ...form, fee: Number(e.target.value) })}
                 className="w-full text-xs border rounded-lg p-2.5 mt-1 outline-none"
+              />
+            </div>
+            <div>
+              <label className="text-xs font-semibold text-slate-600">季打優惠 ($)</label>
+              <input
+                type="number"
+                placeholder="選填"
+                value={form.seasonal_fee}
+                onChange={(e) => setForm({ ...form, seasonal_fee: Number(e.target.value) })}
+                className="w-full text-xs border rounded-lg p-2.5 mt-1 outline-none text-emerald-700 font-bold"
               />
             </div>
           </div>
@@ -1181,6 +1321,89 @@ function AdminDashboardContent() {
             </div>
           </div>
 
+          {/* 🌟 預載固定咖折疊面板 (方便開團直接帶入固定球友) */}
+          {form.group_id && (
+            <div className="border border-emerald-200 bg-emerald-50/50 rounded-xl overflow-hidden transition-all">
+              <button
+                type="button"
+                onClick={() => setIsRegularAccordionOpen(!isRegularAccordionOpen)}
+                className="w-full p-3 flex items-center justify-between text-left bg-emerald-100/60 hover:bg-emerald-100/80 transition-colors"
+              >
+                <div className="flex items-center gap-2">
+                  <Star size={15} className="text-amber-500 fill-amber-500" />
+                  <span className="text-xs font-bold text-emerald-950">
+                    預載本群固定咖 ({prefillRegularIds.length}/{groupMembers.filter((m) => m.is_regular).length} 位)
+                  </span>
+                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-white text-emerald-800 font-bold border border-emerald-300">
+                    開放零打：{Math.max(0, form.max_players - prefillRegularIds.length)} 名
+                  </span>
+                </div>
+                {isRegularAccordionOpen ? (
+                  <ChevronUp size={15} className="text-emerald-700" />
+                ) : (
+                  <ChevronDown size={15} className="text-emerald-700" />
+                )}
+              </button>
+
+              {isRegularAccordionOpen && (
+                <div className="p-3 space-y-2 text-xs">
+                  <p className="text-[11px] text-emerald-800/80 leading-relaxed">
+                    💡 開團將直接把勾選的固定球友列為<strong>正取</strong>（不必每週手動報名），若當週有人請假請直接取消打勾：
+                  </p>
+                  {loadingMembers ? (
+                    <div className="text-slate-400 py-2 flex items-center gap-1.5 text-xs">
+                      <RefreshCw size={12} className="animate-spin text-emerald-600" />
+                      <span>載入固定咖名單中...</span>
+                    </div>
+                  ) : groupMembers.filter((m) => m.is_regular).length === 0 ? (
+                    <div className="text-slate-500 py-2 text-[11px]">
+                      此群組尚未設定固定咖名單，可點選上方「👥 固定咖管理」快速加入常客球友！
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 pt-1">
+                      {groupMembers
+                        .filter((m) => m.is_regular)
+                        .map((m) => {
+                          const isChecked = prefillRegularIds.includes(m.user_id);
+                          return (
+                            <label
+                              key={m.id}
+                              className={`flex items-center justify-between p-2 rounded-lg border cursor-pointer transition-all ${
+                                isChecked
+                                  ? 'bg-white border-emerald-400 shadow-2xs text-emerald-950'
+                                  : 'bg-slate-50/70 border-slate-200 text-slate-400'
+                              }`}
+                            >
+                              <div className="flex items-center gap-2 truncate">
+                                <input
+                                  type="checkbox"
+                                  checked={isChecked}
+                                  onChange={() => handleTogglePrefill(m.user_id)}
+                                  className="rounded text-emerald-600 focus:ring-emerald-500 shrink-0"
+                                />
+                                <span className="font-bold truncate text-xs">
+                                  {m.user?.display_name || '固定球友'}
+                                </span>
+                              </div>
+                              {m.has_seasonal_discount ? (
+                                <span className="text-[10px] px-1.5 py-0.2 rounded bg-amber-100 text-amber-800 font-semibold shrink-0">
+                                  季打 ${m.seasonal_fee || form.seasonal_fee || form.fee}
+                                </span>
+                              ) : (
+                                <span className="text-[10px] px-1.5 py-0.2 rounded bg-slate-100 text-slate-600 shrink-0">
+                                  原價 ${form.fee}
+                                </span>
+                              )}
+                            </label>
+                          );
+                        })}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+
           <div>
             <label className="text-xs font-semibold text-slate-600">建議程度 & 用球</label>
             <div className="grid grid-cols-2 gap-2 mt-1">
@@ -1294,6 +1517,184 @@ function AdminDashboardContent() {
             建立零打場次並取得分享卡片
           </button>
         </form>
+      )}
+
+      {/* 👥 Tab: 固定咖與季打球友管理 */}
+      {activeTab === 'members' && (
+        <div className="space-y-4">
+          <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm space-y-4">
+            <div className="flex items-center justify-between border-b pb-3">
+              <div>
+                <h2 className="font-bold text-base text-slate-800 flex items-center gap-1.5">
+                  <Star size={17} className="text-amber-500 fill-amber-500" />
+                  <span>群組固定咖與季打球友管理</span>
+                </h2>
+                <p className="text-[11px] text-slate-400 mt-0.5">
+                  設定固定咖後，開團時可一鍵預載正取名額，免去每週搶票困擾
+                </p>
+              </div>
+            </div>
+
+            {/* 選擇群組 */}
+            <div>
+              <label className="text-xs font-semibold text-slate-700">選擇管理群組</label>
+              <select
+                value={form.group_id}
+                onChange={(e) => {
+                  setForm({ ...form, group_id: e.target.value });
+                }}
+                className="w-full text-xs border border-slate-200 rounded-lg p-2.5 mt-1 bg-white font-medium text-slate-700 outline-none focus:border-emerald-500"
+              >
+                {availableGroups.length > 0 ? (
+                  availableGroups.map((g) => (
+                    <option key={g.group_id} value={g.group_id}>
+                      🏸 {g.group_name || '羽球社團群組'}
+                    </option>
+                  ))
+                ) : (
+                  <option value="">尚無可用群組</option>
+                )}
+              </select>
+            </div>
+
+            {/* 新增 / 設定固定咖表單 */}
+            <form onSubmit={handleSaveMember} className="p-3.5 bg-slate-50 border border-slate-200 rounded-xl space-y-2.5 text-xs">
+              <div className="font-bold text-slate-700 flex items-center gap-1.5">
+                <UserPlus size={14} className="text-emerald-600" />
+                <span>新增或設定群組固定咖</span>
+              </div>
+              <div>
+                <label className="text-[11px] text-slate-500 font-medium">球友 LINE User ID (以 U 開頭 33 碼字串)</label>
+                <input
+                  type="text"
+                  required
+                  placeholder="例: U1234567890abcdef1234567890abcdef"
+                  value={newMemberUserId}
+                  onChange={(e) => setNewMemberUserId(e.target.value)}
+                  className="w-full text-xs border rounded-lg p-2 mt-1 bg-white outline-none focus:border-emerald-500"
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <label className="flex items-center gap-1.5 cursor-pointer p-2 bg-white rounded-lg border border-slate-200">
+                  <input
+                    type="checkbox"
+                    checked={newMemberIsRegular}
+                    onChange={(e) => setNewMemberIsRegular(e.target.checked)}
+                    className="rounded text-emerald-600"
+                  />
+                  <span className="font-bold text-slate-700 text-xs">設為固定咖 (開團預載)</span>
+                </label>
+                <label className="flex items-center gap-1.5 cursor-pointer p-2 bg-white rounded-lg border border-slate-200">
+                  <input
+                    type="checkbox"
+                    checked={newMemberHasDiscount}
+                    onChange={(e) => setNewMemberHasDiscount(e.target.checked)}
+                    className="rounded text-amber-600"
+                  />
+                  <span className="font-bold text-slate-700 text-xs">啟用季打單場優惠價</span>
+                </label>
+              </div>
+              {newMemberHasDiscount && (
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="text-[11px] text-slate-500">季打每場優惠價 ($)</label>
+                    <input
+                      type="number"
+                      value={newMemberDiscountFee}
+                      onChange={(e) => setNewMemberDiscountFee(Number(e.target.value))}
+                      className="w-full text-xs border rounded-lg p-2 mt-1 bg-white outline-none"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[11px] text-slate-500">季打效期至 (選填)</label>
+                    <input
+                      type="date"
+                      value={newMemberValidUntil}
+                      onChange={(e) => setNewMemberValidUntil(e.target.value)}
+                      className="w-full text-xs border rounded-lg p-2 mt-1 bg-white outline-none"
+                    />
+                  </div>
+                </div>
+              )}
+              <div>
+                <label className="text-[11px] text-slate-500">備忘註記 (如: 已繳 2026 Q3 季費)</label>
+                <input
+                  type="text"
+                  placeholder="選填，僅團主可見"
+                  value={newMemberNotes}
+                  onChange={(e) => setNewMemberNotes(e.target.value)}
+                  className="w-full text-xs border rounded-lg p-2 mt-1 bg-white outline-none"
+                />
+              </div>
+              <button
+                type="submit"
+                disabled={isSavingMember || !newMemberUserId.trim()}
+                className="w-full py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-bold text-xs shadow-xs disabled:opacity-50 transition-all"
+              >
+                {isSavingMember ? '儲存中...' : '確認儲存固定咖身分'}
+              </button>
+            </form>
+
+            {/* 本群固定咖清單 */}
+            <div className="space-y-2 pt-2">
+              <h3 className="font-bold text-xs text-slate-600 flex items-center justify-between">
+                <span>目前群組固定咖清單 ({groupMembers.length} 人)</span>
+                <button
+                  type="button"
+                  onClick={() => form.group_id && fetchGroupMembers(form.group_id)}
+                  className="text-[11px] text-emerald-600 hover:text-emerald-700 flex items-center gap-1"
+                >
+                  <RefreshCw size={11} className={loadingMembers ? 'animate-spin' : ''} />
+                  <span>刷新</span>
+                </button>
+              </h3>
+
+              {loadingMembers ? (
+                <div className="text-center py-6 text-slate-400 text-xs">讀取中...</div>
+              ) : groupMembers.length === 0 ? (
+                <div className="text-center py-6 text-slate-400 text-xs bg-slate-50 rounded-xl border border-dashed border-slate-200">
+                  尚無固定咖球友，可在上方表單輸入球友 LINE ID 進行設定
+                </div>
+              ) : (
+                <div className="divide-y divide-slate-100 bg-slate-50/50 rounded-xl border border-slate-200 overflow-hidden">
+                  {groupMembers.map((m, idx) => (
+                    <div key={m.id} className="p-3 flex items-center justify-between text-xs bg-white">
+                      <div>
+                        <div className="flex items-center gap-1.5">
+                          <span className="font-bold text-slate-800">
+                            {idx + 1}. {m.user?.display_name || '固定球友'}
+                          </span>
+                          {m.is_regular && (
+                            <span className="text-[10px] px-1.5 py-0.2 rounded bg-emerald-100 text-emerald-800 font-bold">
+                              固定咖
+                            </span>
+                          )}
+                          {m.has_seasonal_discount && (
+                            <span className="text-[10px] px-1.5 py-0.2 rounded bg-amber-100 text-amber-800 font-semibold">
+                              季打 ${m.seasonal_fee || 180}
+                            </span>
+                          )}
+                        </div>
+                        <div className="text-[10px] text-slate-400 mt-0.5 space-x-2">
+                          <span>ID: {m.user_id.slice(0, 10)}...</span>
+                          {m.valid_until && <span>效期至: {m.valid_until}</span>}
+                          {m.notes && <span className="text-slate-500">({m.notes})</span>}
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteMember(m.id)}
+                        className="text-[11px] text-red-500 hover:text-red-700 underline px-1"
+                      >
+                        移除
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
       )}
 
       {activeTab === 'sessions' && !selectedSession && (
@@ -1628,18 +2029,35 @@ function AdminDashboardContent() {
                     {registrations.map((r, idx) => (
                       <div key={r.id} className="py-2.5 flex items-center justify-between">
                         <div>
-                          <div className="flex items-center gap-2">
+                          <div className="flex items-center gap-1.5 flex-wrap">
                             <span className="text-xs font-bold text-slate-700">
                               {r.status === 'main' ? `${idx + 1}.` : `[備${r.waitlist_order}]`} {r.player_name}
                             </span>
+                            {r.is_regular && (
+                              <span className="text-[10px] px-1.5 py-0.2 rounded bg-emerald-100 text-emerald-800 font-bold border border-emerald-200">
+                                固定咖
+                              </span>
+                            )}
+                            {r.applicable_fee && r.applicable_fee < selectedSession.fee && (
+                              <span className="text-[10px] px-1.5 py-0.2 rounded bg-amber-100 text-amber-800 font-semibold border border-amber-200">
+                                季打優惠
+                              </span>
+                            )}
                             {r.party_size > 1 && (
                               <span className="text-[10px] bg-slate-100 px-1.5 py-0.5 rounded text-slate-600">
                                 +{r.party_size}
                               </span>
                             )}
                           </div>
-                          <div className="text-[11px] text-slate-400 mt-0.5">
-                            應付: ${selectedSession.fee * (r.party_size || 1)}
+                          <div className="text-[11px] text-slate-400 mt-0.5 flex items-center gap-1.5">
+                            <span>
+                              應付: ${(r.applicable_fee ?? selectedSession.fee) * (r.party_size || 1)}
+                            </span>
+                            {r.applicable_fee && r.applicable_fee !== selectedSession.fee && (
+                              <span className="line-through text-slate-300">
+                                (${selectedSession.fee * (r.party_size || 1)})
+                              </span>
+                            )}
                           </div>
                         </div>
 

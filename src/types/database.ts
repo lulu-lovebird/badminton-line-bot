@@ -59,6 +59,7 @@ export interface MatchSession {
   cancel_deadline?: string;
   is_roster_public: boolean;
   status: SessionStatus;
+  seasonal_fee?: number | null;
   created_at: string;
   updated_at: string;
   // Computed / Joined fields
@@ -68,6 +69,22 @@ export interface MatchSession {
   waitlist_count?: number;
   group_name?: string;
   group?: Group;
+}
+
+export interface GroupMembership {
+  id: string;
+  group_id: string;
+  user_id: string;
+  is_regular: boolean;
+  has_seasonal_discount: boolean;
+  seasonal_fee?: number | null;
+  valid_from?: string | null;
+  valid_until?: string | null;
+  notes?: string | null;
+  created_at: string;
+  updated_at: string;
+  // Joined fields
+  user?: User;
 }
 
 export interface Registration {
@@ -80,6 +97,9 @@ export interface Registration {
   waitlist_order?: number | null;
   payment_status: PaymentStatus;
   attendance_status: AttendanceStatus;
+  is_regular?: boolean;
+  is_prefilled?: boolean;
+  applicable_fee?: number | null;
   registered_at: string;
   cancelled_at?: string | null;
   notes?: string;

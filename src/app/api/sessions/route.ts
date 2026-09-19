@@ -324,11 +324,13 @@ export async function POST(req: NextRequest) {
       level_requirement,
       shuttlecock,
       fee,
+      seasonal_fee,
       notes,
       cancel_deadline,
       notify_group_id,
       host_name,
       is_roster_public,
+      prefilled_user_ids,
     } = body;
 
     // 1. 確保團主使用者存在且記錄真實 LINE 暱稱與頭像（絕不覆蓋為「團主」）
@@ -382,6 +384,11 @@ export async function POST(req: NextRequest) {
     }
 
     // 3. 建立場次 (確保日期時間以台灣時區標準化存入 TIMESTAMPTZ)
+    const baseFee = Number(fee) || 200;
+    const parsedSeasonalFee = seasonal_fee !== undefined && seasonal_fee !== null && !isNaN(Number(seasonal_fee))
+      ? Number(seasonal_fee)
+      : null;
+
     const insertPayload: Record<string, unknown> = {
       host_user_id,
       group_id: group_id || null,
@@ -395,7 +402,8 @@ export async function POST(req: NextRequest) {
       max_waitlist: max_waitlist !== undefined && !isNaN(Number(max_waitlist)) ? Math.max(0, Number(max_waitlist)) : 2,
       level_requirement,
       shuttlecock,
-      fee: Number(fee) || 200,
+      fee: baseFee,
+      seasonal_fee: parsedSeasonalFee,
       notes,
       cancel_deadline: cancel_deadline ? toTaipeiISOString(cancel_deadline) : null,
       is_roster_public: is_roster_public !== undefined ? Boolean(is_roster_public) : true,
@@ -408,9 +416,10 @@ export async function POST(req: NextRequest) {
       .select()
       .single();
 
-    // 🛡️ 容錯回退：若資料庫尚未執行 is_roster_public 遷移腳本，剔除該欄位重試
+    // 🛡️ 容錯回退：若資料庫尚未執行 is_roster_public 或 seasonal_fee 遷移腳本，剔除欄位重試
     if (error && error.code === 'PGRST204') {
       delete insertPayload.is_roster_public;
+      delete insertPayload.seasonal_fee;
       const retry = await supabaseAdmin
         .from('match_sessions')
         .insert(insertPayload)
@@ -422,6 +431,78 @@ export async function POST(req: NextRequest) {
 
     if (error || !session) {
       return NextResponse.json({ error: error?.message || '建立失敗' }, { status: 500 });
+    }
+
+    // 3.1 預載固定咖處理 (若開團時有勾選固定咖)
+    if (Array.isArray(prefilled_user_ids) && prefilled_user_ids.length > 0) {
+      const validPrefillIds: string[] = prefilled_user_ids.slice(0, session.max_players);
+
+      // 查詢預載球友的個人資料與 membership 設定
+      const [usersRes, membershipsRes] = await Promise.all([
+        supabaseAdmin.from('users').select('line_user_id, display_name').in('line_user_id', validPrefillIds),
+        group_id
+          ? supabaseAdmin
+              .from('group_memberships')
+              .select('user_id, has_seasonal_discount, seasonal_fee')
+              .eq('group_id', group_id)
+              .in('user_id', validPrefillIds)
+          : Promise.resolve({ data: [] }),
+      ]);
+
+      const userMap = new Map((usersRes.data || []).map((u) => [u.line_user_id, u.display_name]));
+      const membershipMap = new Map(
+        (membershipsRes.data || []).map((m) => [m.user_id, m])
+      );
+
+      const prefillRegistrations = validPrefillIds.map((uid) => {
+        const mem = membershipMap.get(uid);
+        let applicableFee = baseFee;
+        if (mem?.has_seasonal_discount) {
+          applicableFee = mem.seasonal_fee || parsedSeasonalFee || baseFee;
+        }
+
+        return {
+          session_id: session.id,
+          user_id: uid,
+          player_name: userMap.get(uid) || '固定球友',
+          party_size: 1,
+          status: 'main',
+          payment_status: 'unpaid',
+          attendance_status: 'pending',
+          is_regular: true,
+          is_prefilled: true,
+          applicable_fee: applicableFee,
+        };
+      });
+
+      if (prefillRegistrations.length > 0) {
+        let regInsertError = null;
+        const { error: regErr } = await supabaseAdmin.from('registrations').insert(prefillRegistrations);
+        if (regErr) {
+          regInsertError = regErr;
+          // 容錯回退：若資料表尚未擴充 is_regular 等新欄位，降級為基本欄位重試
+          if (regErr.code === 'PGRST204' || regErr.message?.includes('column')) {
+            const fallbackRegs = prefillRegistrations.map((r) => ({
+              session_id: r.session_id,
+              user_id: r.user_id,
+              player_name: r.player_name,
+              party_size: 1,
+              status: 'main',
+              payment_status: 'unpaid',
+              attendance_status: 'pending',
+            }));
+            await supabaseAdmin.from('registrations').insert(fallbackRegs);
+          } else {
+            console.warn('[Prefill Regulars] 寫入預載名單異常:', regInsertError);
+          }
+        }
+
+        // 若預載人數已達上限，自動將場次狀態更新為 full
+        if (prefillRegistrations.length >= session.max_players) {
+          await supabaseAdmin.from('match_sessions').update({ status: 'full' }).eq('id', session.id);
+          session.status = 'full';
+        }
+      }
     }
 
     // 4. 若有設定推播群組，自動發送 Flex Message

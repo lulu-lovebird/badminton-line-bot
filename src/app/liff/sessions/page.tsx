@@ -13,6 +13,7 @@ interface RosterItem {
   status: 'main' | 'waitlist' | 'cancelled';
   waitlist_order?: number | null;
   is_mine?: boolean;
+  is_regular?: boolean;
 }
 
 function SessionListContent() {
@@ -402,9 +403,14 @@ function SessionListContent() {
                     </span>
                   </div>
 
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 flex-wrap">
                     <DollarSign size={14} className="text-amber-500 shrink-0" />
                     <span className="font-semibold text-amber-700">${s.fee} / 人</span>
+                    {s.seasonal_fee && (
+                      <span className="text-[11px] px-1.5 py-0.2 rounded bg-amber-100 text-amber-800 font-bold border border-amber-200">
+                        季打優惠 ${s.seasonal_fee}
+                      </span>
+                    )}
                     {s.shuttlecock && (
                       <span className="ml-2 text-slate-500">🏸 {s.shuttlecock}</span>
                     )}
@@ -534,9 +540,14 @@ function SessionListContent() {
                                                   : 'bg-white border-slate-200 text-slate-700'
                                               }`}
                                             >
-                                              <span className="truncate">
-                                                {idx + 1}. {r.player_name}
-                                                {r.is_mine && <span className="ml-1 text-[10px] text-emerald-600">(您)</span>}
+                                              <span className="truncate flex items-center gap-1">
+                                                <span>{idx + 1}. {r.player_name}</span>
+                                                {r.is_regular && (
+                                                  <span className="text-[9px] px-1 py-0.2 rounded bg-emerald-100 text-emerald-800 font-bold border border-emerald-200">
+                                                    固定
+                                                  </span>
+                                                )}
+                                                {r.is_mine && <span className="text-[10px] text-emerald-600 font-bold">(您)</span>}
                                               </span>
                                               {r.party_size > 1 && (
                                                 <span className="text-[10px] bg-slate-100 text-slate-600 px-1 rounded ml-1 shrink-0">
