@@ -6,7 +6,7 @@ import { useSearchParams } from 'next/navigation';
 import { PlusCircle, Users, CheckCircle, Clock, Calendar, MapPin, Send, AlertCircle, RefreshCw, ShieldAlert, Key, Copy, Shield, UserPlus, FileText, User, Share2, Pencil, X, Ban, Trash2, Settings, Star, ChevronDown, ChevronUp, UserCheck } from 'lucide-react';
 import { MatchSession, Registration, GroupMembership } from '@/types/database';
 import { initLiff } from '@/lib/liff-client';
-import { getSessionLiffUrl, formatSessionAnnouncement, shareSessionViaTargetPicker } from '@/lib/share-utils';
+import { getSessionLiffUrl, formatSessionAnnouncement, shareSessionViaTargetPicker, getRegularInviteLiffUrl } from '@/lib/share-utils';
 
 // 輔助函式：計算時間順延天數並輸出 datetime-local 格式 (YYYY-MM-DDTHH:mm) - 強制以台灣時區 Asia/Taipei 轉換
 function toDatetimeLocalString(dateStr: string | Date, addDays = 0): string {
@@ -807,8 +807,7 @@ function AdminDashboardContent() {
     }
     const currentGroup = availableGroups.find((g) => g.group_id === form.group_id);
     const groupNameStr = currentGroup?.group_name || '羽球社團';
-    const origin = typeof window !== 'undefined' ? window.location.origin : '';
-    const inviteUrl = `${origin}/liff/join-regular?groupId=${encodeURIComponent(form.group_id)}&groupName=${encodeURIComponent(groupNameStr)}`;
+    const inviteUrl = getRegularInviteLiffUrl(form.group_id, groupNameStr);
     
     const text = `🏸 【${groupNameStr}】固定咖專屬登記邀請\n點擊下方專屬連結，自動以 LINE 身分加入本社團固定咖名單，下週開團免搶票自動保留名額！\n👉 ${inviteUrl}`;
     

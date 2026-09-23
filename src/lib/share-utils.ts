@@ -38,6 +38,17 @@ export function getSessionLiffUrl(sessionOrId: string | MatchSession, liffBaseUr
 }
 
 /**
+ * 取得固定咖專屬登記專用 LIFF 連結 (自動導向官方 LIFF 端點以保證自動登入授權)
+ */
+export function getRegularInviteLiffUrl(groupId: string, groupName?: string, liffBaseUrl?: string): string {
+  const base = liffBaseUrl || process.env.NEXT_PUBLIC_LIFF_URL || process.env.LINE_LIFF_URL || 'https://liff.line.me/2011571193-7TCyhgGU';
+  const cleanBase = base.replace(/\/$/, '');
+  const groupParam = `groupId=${encodeURIComponent(groupId)}`;
+  const nameParam = groupName ? `&groupName=${encodeURIComponent(groupName)}` : '';
+  return `${cleanBase}/join-regular?${groupParam}${nameParam}`;
+}
+
+/**
  * 產生開團排版文案（供團主一鍵複製至 LINE 群組）
  */
 export function formatSessionAnnouncement(session: MatchSession, liffBaseUrl?: string): string {

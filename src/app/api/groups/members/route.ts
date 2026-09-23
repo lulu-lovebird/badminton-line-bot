@@ -176,14 +176,24 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: '缺少必要欄位 (group_id, user_id)' }, { status: 400 });
     }
 
+    if (!caller) {
+      return NextResponse.json(
+        { error: '請先登入 LINE（LINE 憑證驗證失敗，請從 LINE 重新點擊專屬連結開啟）' },
+        { status: 401 }
+      );
+    }
+
     // 權限檢查：
     // 1. 團主或管理員可替任何人設定
     // 2. 一般球友若持有本人身分 (caller.userId === user_id)，可透過方案 C 自主登記成為固定咖 (is_regular=true, 無季打優惠)
-    const isSelfRegistration = caller && caller.userId === user_id;
-    const isHostOrAdmin = caller && (caller.role === 'host' || caller.role === 'admin' || caller.isSuperAdmin);
+    const isSelfRegistration = caller.userId === user_id;
+    const isHostOrAdmin = caller.role === 'host' || caller.role === 'admin' || caller.isSuperAdmin;
 
     if (!isHostOrAdmin && !isSelfRegistration) {
-      return NextResponse.json({ error: '無權限執行此操作' }, { status: 403 });
+      return NextResponse.json(
+        { error: '無權限執行此操作（僅限登記本人帳號或由團主管理操作）' },
+        { status: 403 }
+      );
     }
 
     // 若使用者尚未建立在 users 表，且有提供 display_name，順道 upsert user

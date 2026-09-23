@@ -17,38 +17,68 @@ function JoinRegularContent() {
   const [status, setStatus] = useState<'idle' | 'success' | 'already' | 'error'>('idle');
   const [errorMsg, setErrorMsg] = useState<string>('');
   const [groupName, setGroupName] = useState<string>(groupNameParam || '羽球社團');
+  const [needsLogin, setNeedsLogin] = useState<boolean>(false);
 
   useEffect(() => {
     document.title = '🏸 登記加入羽球團固定咖';
     async function setup() {
       try {
         const liff = await initLiff();
-        let token = '';
-        if (liff && liff.isLoggedIn()) {
-          const profile = await liff.getProfile();
-          token = liff.getIDToken() || '';
-          setIdToken(token);
-          setUserProfile({
-            userId: profile.userId,
-            displayName: profile.displayName,
-            pictureUrl: profile.pictureUrl,
-          });
+        if (liff) {
+          if (liff.isLoggedIn()) {
+            const profile = await liff.getProfile();
+            const token = liff.getIDToken() || '';
+            setIdToken(token);
+            setUserProfile({
+              userId: profile.userId,
+              displayName: profile.displayName,
+              pictureUrl: profile.pictureUrl,
+            });
+          } else {
+            // 未在 LINE 內登入，標記需要登入並嘗試引導
+            setNeedsLogin(true);
+            try {
+              liff.login({ redirectUri: window.location.href });
+              return;
+            } catch (loginErr) {
+              console.warn('自動跳轉 LINE 登入受限，請使用者手動點擊:', loginErr);
+            }
+          }
         } else {
-          // 本地開發模擬測試
-          setUserProfile({
-            userId: 'U_demo_regular_user',
-            displayName: '測試球友',
-            pictureUrl: '',
-          });
+          // 本地開發環境模擬測試
+          if (process.env.NODE_ENV !== 'production') {
+            setUserProfile({
+              userId: 'U_demo_regular_user',
+              displayName: '測試球友',
+              pictureUrl: '',
+            });
+          } else {
+            setErrorMsg('無法連接 LINE 服務，請確認是透過 LINE 點擊專屬連結開啟');
+            setStatus('error');
+          }
         }
       } catch (err) {
         console.error('LIFF 初始化失敗:', err);
+        setErrorMsg('LINE 環境初始化失敗，請稍後重新開啟連結');
+        setStatus('error');
       } finally {
         setLoading(false);
       }
     }
     setup();
   }, []);
+
+  const handleManualLogin = async () => {
+    try {
+      const liff = await initLiff();
+      if (liff) {
+        liff.login({ redirectUri: window.location.href });
+      }
+    } catch (e) {
+      console.error('手動跳轉 LINE 登入失敗:', e);
+      alert('跳轉登入失敗，請確認已安裝 LINE 並使用 LINE 開啟此連結');
+    }
+  };
 
   // 檢查是否已是固定咖
   useEffect(() => {
@@ -74,6 +104,13 @@ function JoinRegularContent() {
 
   const handleRegister = async () => {
     if (!groupId || !userProfile?.userId) return;
+
+    if (process.env.NODE_ENV === 'production' && !idToken) {
+      alert('尚未完成 LINE 身分驗證，即將為您重新導向登入...');
+      handleManualLogin();
+      return;
+    }
+
     setSubmitting(true);
     setErrorMsg('');
 
@@ -183,50 +220,72 @@ function JoinRegularContent() {
         </div>
 
         {/* 操作與狀態展示 */}
-        {status === 'already' && (
-          <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-4 text-center space-y-2">
-            <CheckCircle className="w-8 h-8 text-emerald-600 mx-auto" />
-            <h3 className="font-bold text-emerald-900 text-sm">您已經是本團固定咖囉！</h3>
-            <p className="text-xs text-emerald-700">
-              每週團主開團時皆會自動為您帶入名冊，無須重複登記。
-            </p>
+        {needsLogin ? (
+          <div className="space-y-3">
+            <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 text-center space-y-2">
+              <AlertCircle className="w-8 h-8 text-amber-600 mx-auto" />
+              <h3 className="font-bold text-amber-900 text-sm">請先登入 LINE 身分</h3>
+              <p className="text-xs text-amber-700">
+                加入固定咖需要確認您的 LINE 帳號，以確保未來開團自動保留您的正取名額。
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={handleManualLogin}
+              className="w-full py-3.5 bg-[#06C755] hover:bg-[#05b34c] active:scale-98 text-white rounded-xl font-bold text-sm shadow-md flex items-center justify-center gap-2 transition-all"
+            >
+              <UserCheck className="w-4 h-4" />
+              <span>點擊登入 LINE 帳號</span>
+            </button>
           </div>
-        )}
-
-        {status === 'success' && (
-          <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-4 text-center space-y-2">
-            <CheckCircle className="w-8 h-8 text-emerald-600 mx-auto" />
-            <h3 className="font-bold text-emerald-900 text-sm">🎉 登記成功！</h3>
-            <p className="text-xs text-emerald-700 leading-relaxed">
-              您已成功加入【{groupName}】固定咖清單，下週起開團將自動為您保留正取名額！
-            </p>
-          </div>
-        )}
-
-        {status === 'error' && (
-          <div className="bg-red-50 border border-red-200 rounded-2xl p-4 text-center space-y-2">
-            <AlertCircle className="w-8 h-8 text-red-600 mx-auto" />
-            <h3 className="font-bold text-red-900 text-sm">登記未完成</h3>
-            <p className="text-xs text-red-700">{errorMsg}</p>
-          </div>
-        )}
-
-        {status === 'idle' && (
-          <button
-            type="button"
-            disabled={submitting}
-            onClick={handleRegister}
-            className="w-full py-3.5 bg-emerald-600 hover:bg-emerald-700 active:scale-98 text-white rounded-xl font-bold text-sm shadow-md flex items-center justify-center gap-2 transition-all disabled:opacity-50"
-          >
-            {submitting ? (
-              <span>處理中...</span>
-            ) : (
-              <>
-                <UserCheck className="w-4 h-4" />
-                <span>確認以本人 LINE 身分加入固定咖</span>
-              </>
+        ) : (
+          <>
+            {status === 'already' && (
+              <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-4 text-center space-y-2">
+                <CheckCircle className="w-8 h-8 text-emerald-600 mx-auto" />
+                <h3 className="font-bold text-emerald-900 text-sm">您已經是本團固定咖囉！</h3>
+                <p className="text-xs text-emerald-700">
+                  每週團主開團時皆會自動為您帶入名冊，無須重複登記。
+                </p>
+              </div>
             )}
-          </button>
+
+            {status === 'success' && (
+              <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-4 text-center space-y-2">
+                <CheckCircle className="w-8 h-8 text-emerald-600 mx-auto" />
+                <h3 className="font-bold text-emerald-900 text-sm">🎉 登記成功！</h3>
+                <p className="text-xs text-emerald-700 leading-relaxed">
+                  您已成功加入【{groupName}】固定咖清單，下週起開團將自動為您保留正取名額！
+                </p>
+              </div>
+            )}
+
+            {status === 'error' && (
+              <div className="bg-red-50 border border-red-200 rounded-2xl p-4 text-center space-y-2">
+                <AlertCircle className="w-8 h-8 text-red-600 mx-auto" />
+                <h3 className="font-bold text-red-900 text-sm">登記未完成</h3>
+                <p className="text-xs text-red-700">{errorMsg}</p>
+              </div>
+            )}
+
+            {status === 'idle' && (
+              <button
+                type="button"
+                disabled={submitting}
+                onClick={handleRegister}
+                className="w-full py-3.5 bg-emerald-600 hover:bg-emerald-700 active:scale-98 text-white rounded-xl font-bold text-sm shadow-md flex items-center justify-center gap-2 transition-all disabled:opacity-50"
+              >
+                {submitting ? (
+                  <span>處理中...</span>
+                ) : (
+                  <>
+                    <UserCheck className="w-4 h-4" />
+                    <span>確認以本人 LINE 身分加入固定咖</span>
+                  </>
+                )}
+              </button>
+            )}
+          </>
         )}
       </div>
 
