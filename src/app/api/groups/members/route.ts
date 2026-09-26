@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 import { verifyLineIdToken, isSuperAdmin } from '@/lib/auth';
+import { hasHostGroupPermission } from '@/lib/host-permissions';
+import { isUserInGroup } from '@/lib/line-group-auth';
 
 export const dynamic = 'force-dynamic';
 
@@ -43,9 +45,18 @@ export async function GET(req: NextRequest) {
     const groupId = searchParams.get('groupId')?.trim();
     const action = searchParams.get('action')?.trim();
     const regularOnly = searchParams.get('regularOnly') === 'true';
+    const selfUserId = searchParams.get('userId');
 
     if (!groupId) {
       return NextResponse.json({ error: '缺少 groupId 參數' }, { status: 400 });
+    }
+
+    const caller = await getCallerIdentity(req);
+    if (!caller || (selfUserId !== caller.userId && !(await hasHostGroupPermission(caller.userId, groupId)))) {
+      return NextResponse.json({ error: '無權限檢視群組名單' }, { status: 403 });
+    }
+    if (selfUserId && action === 'history_players') {
+      return NextResponse.json({ error: '無權限查詢歷史名單' }, { status: 403 });
     }
 
     // 方案 A: 查詢該群組歷史所有曾報名過的球友名單（依出席/報名次數排序）
@@ -136,6 +147,7 @@ export async function GET(req: NextRequest) {
     if (regularOnly) {
       query = query.eq('is_regular', true);
     }
+    if (selfUserId) query = query.eq('user_id', selfUserId);
 
     const { data, error } = await query.order('created_at', { ascending: true });
 
@@ -187,13 +199,20 @@ export async function POST(req: NextRequest) {
     // 1. 團主或管理員可替任何人設定
     // 2. 一般球友若持有本人身分 (caller.userId === user_id)，可透過方案 C 自主登記成為固定咖 (is_regular=true, 無季打優惠)
     const isSelfRegistration = caller.userId === user_id;
-    const isHostOrAdmin = caller.role === 'host' || caller.role === 'admin' || caller.isSuperAdmin;
+    const isHostOrAdmin = await hasHostGroupPermission(caller.userId, group_id);
 
     if (!isHostOrAdmin && !isSelfRegistration) {
       return NextResponse.json(
         { error: '無權限執行此操作（僅限登記本人帳號或由團主管理操作）' },
         { status: 403 }
       );
+    }
+    if (!isHostOrAdmin) {
+      const { data: group } = await supabaseAdmin.from('groups')
+        .select('is_active').eq('group_id', group_id).maybeSingle();
+      if (!group?.is_active || !(await isUserInGroup(group_id, caller.userId))) {
+        return NextResponse.json({ error: '只有此群組的成員可以登記固定咖' }, { status: 403 });
+      }
     }
 
     // 若使用者尚未建立在 users 表，且有提供 display_name，順道 upsert user
@@ -204,7 +223,7 @@ export async function POST(req: NextRequest) {
         picture_url: picture_url || null,
         role: 'member',
         updated_at: new Date().toISOString(),
-      }, { onConflict: 'line_user_id' });
+      }, { onConflict: 'line_user_id', ignoreDuplicates: true });
     }
 
     // 自主登記球友預設為固定咖，但不具備季打優惠權限（優惠需由團主審核設定）
@@ -246,15 +265,22 @@ export async function POST(req: NextRequest) {
 export async function DELETE(req: NextRequest) {
   try {
     const caller = await getCallerIdentity(req);
-    if (!caller || (caller.role !== 'host' && caller.role !== 'admin' && !caller.isSuperAdmin)) {
-      return NextResponse.json({ error: '無權限執行此操作' }, { status: 403 });
-    }
+    if (!caller) return NextResponse.json({ error: '請先登入' }, { status: 401 });
 
     const { searchParams } = new URL(req.url);
     const id = searchParams.get('id');
     const groupId = searchParams.get('groupId');
     const userId = searchParams.get('userId');
 
+    let targetGroupId = groupId;
+    if (id) {
+      const { data: membership } = await supabaseAdmin.from('group_memberships')
+        .select('group_id').eq('id', id).maybeSingle();
+      targetGroupId = membership?.group_id || null;
+    }
+    if (!targetGroupId || !(await hasHostGroupPermission(caller.userId, targetGroupId))) {
+      return NextResponse.json({ error: '無權限管理此群組' }, { status: 403 });
+    }
     let query = supabaseAdmin.from('group_memberships').delete();
 
     if (id) {

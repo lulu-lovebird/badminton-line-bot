@@ -9,6 +9,8 @@ export type ApplicationStatus = 'pending' | 'approved' | 'rejected';
 export interface HostApplication {
   id: string;
   user_id: string;
+  group_id: string | null;
+  group_name?: string;
   display_name: string;
   picture_url?: string;
   reason?: string;
@@ -69,6 +71,15 @@ export interface MatchSession {
   waitlist_count?: number;
   group_name?: string;
   group?: Group;
+}
+
+export interface HostGroupPermission {
+  id: string;
+  user_id: string;
+  group_id: string;
+  group_name: string;
+  display_name: string;
+  created_at: string;
 }
 
 export interface GroupMembership {

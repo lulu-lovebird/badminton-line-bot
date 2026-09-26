@@ -3,6 +3,7 @@ import { supabaseAdmin } from '@/lib/supabase';
 import { cancelRegistrationAndPromote } from '@/lib/registration-service';
 import { verifyLineIdToken, isSuperAdmin } from '@/lib/auth';
 import { isUserInGroup } from '@/lib/line-group-auth';
+import { hasHostGroupPermission, isGlobalAdmin } from '@/lib/host-permissions';
 import { lineClient } from '@/lib/line';
 import { invalidateSessionCache } from '@/lib/session-cache';
 
@@ -244,11 +245,6 @@ export async function POST(req: NextRequest) {
     const { session_id, player_name, party_size = 1 } = body;
 
     let targetUserId = caller?.userId;
-    const isHostOrAdmin = caller?.role === 'host' || caller?.role === 'admin';
-
-    if (isHostOrAdmin && body.user_id?.startsWith('proxy_')) {
-      targetUserId = body.user_id;
-    }
 
     if (!targetUserId) {
       return NextResponse.json({ error: '身分驗證未通過，無法報名' }, { status: 401 });
@@ -264,6 +260,15 @@ export async function POST(req: NextRequest) {
     if (sErr || !session) {
       return NextResponse.json({ error: '場次不存在' }, { status: 404 });
     }
+    if (body.user_id?.startsWith('proxy_')) {
+      if (!caller || !(session.group_id
+        ? await hasHostGroupPermission(caller.userId, session.group_id)
+        : await isGlobalAdmin(caller.userId))) {
+        return NextResponse.json({ error: '無權代此群組球友報名' }, { status: 403 });
+      }
+      targetUserId = body.user_id;
+    }
+    if (!targetUserId) return NextResponse.json({ error: '身分驗證未通過' }, { status: 401 });
 
     if (session.status === 'cancelled' || session.status === 'closed' || session.status === 'deleted') {
       return NextResponse.json({ error: '此場次已停用或已取消，無法報名' }, { status: 400 });
@@ -381,7 +386,12 @@ export async function PATCH(req: NextRequest) {
       return NextResponse.json({ error: '找不到該報名紀錄' }, { status: 404 });
     }
 
-    const isHostOrAdmin = caller.role === 'host' || caller.role === 'admin';
+    const { data: session } = await supabaseAdmin.from('match_sessions')
+      .select('group_id, host_user_id').eq('id', reg.session_id).maybeSingle();
+    const isHostOrAdmin = await isGlobalAdmin(caller.userId) || Boolean(
+      session?.host_user_id === caller.userId && session.group_id &&
+      await hasHostGroupPermission(caller.userId, session.group_id)
+    );
     const isOwner = reg.user_id === caller.userId;
 
     if (action === 'cancel') {

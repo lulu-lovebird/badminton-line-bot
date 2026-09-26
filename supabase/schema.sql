@@ -23,6 +23,18 @@ CREATE TABLE IF NOT EXISTS groups (
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+-- 團主的群組授權（一人可管理多群，一群可有多位團主）
+CREATE TABLE IF NOT EXISTS host_group_permissions (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id TEXT NOT NULL REFERENCES users(line_user_id) ON DELETE CASCADE,
+    group_id TEXT NOT NULL REFERENCES groups(group_id) ON DELETE CASCADE,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    UNIQUE (user_id, group_id)
+);
+CREATE INDEX IF NOT EXISTS idx_host_group_permissions_group_id ON host_group_permissions(group_id);
+ALTER TABLE host_group_permissions ENABLE ROW LEVEL SECURITY;
+REVOKE ALL ON host_group_permissions FROM anon, authenticated;
+
 -- 3. 零打場次資料表 (綁定 group_id)
 CREATE TABLE IF NOT EXISTS match_sessions (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -96,6 +108,7 @@ FOR EACH ROW EXECUTE FUNCTION update_timestamp();
 CREATE TABLE IF NOT EXISTS host_applications (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id TEXT NOT NULL REFERENCES users(line_user_id) ON DELETE CASCADE,
+    group_id TEXT REFERENCES groups(group_id) ON DELETE SET NULL,
     display_name TEXT NOT NULL,
     picture_url TEXT,
     reason TEXT,                                   -- 申請原因 / 自述
@@ -111,6 +124,8 @@ CREATE TABLE IF NOT EXISTS host_applications (
 CREATE INDEX IF NOT EXISTS idx_host_applications_status ON host_applications(status);
 CREATE INDEX IF NOT EXISTS idx_host_applications_user_id ON host_applications(user_id);
 CREATE INDEX IF NOT EXISTS idx_host_applications_created_at ON host_applications(created_at DESC);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_host_applications_pending_group
+    ON host_applications(user_id, group_id) WHERE status = 'pending';
 
 -- 自動更新 updated_at
 CREATE OR REPLACE TRIGGER trigger_host_applications_updated_at

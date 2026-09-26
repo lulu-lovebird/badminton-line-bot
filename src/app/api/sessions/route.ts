@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 import { lineClient, createSessionFlexMessage } from '@/lib/line';
 import { verifyLineIdToken, isSuperAdmin } from '@/lib/auth';
+import { getAuthenticatedUserId, hasHostGroupPermission } from '@/lib/host-permissions';
 import { isUserInGroup } from '@/lib/line-group-auth';
 import {
   generateSessionCacheKey,
@@ -333,6 +334,23 @@ export async function POST(req: NextRequest) {
       prefilled_user_ids,
     } = body;
 
+    const caller = await getAuthenticatedUserId(req);
+    if (!caller) return NextResponse.json({ error: '請先登入' }, { status: 401 });
+    if (caller !== host_user_id) return NextResponse.json({ error: '不得代替他人建立場次' }, { status: 403 });
+    if (!group_id || typeof group_id !== 'string') {
+      return NextResponse.json({ error: '請選擇已授權的群組' }, { status: 400 });
+    }
+    if (!(await hasHostGroupPermission(caller, group_id))) {
+      return NextResponse.json({ error: '您沒有此群組的開團權限' }, { status: 403 });
+    }
+    if (notify_group_id && notify_group_id !== group_id) {
+      return NextResponse.json({ error: '推播群組與場次群組不符' }, { status: 400 });
+    }
+    const { data: targetGroup, error: groupError } = await supabaseAdmin.from('groups')
+      .select('is_active').eq('group_id', group_id).maybeSingle();
+    if (groupError) throw new Error(groupError.message);
+    if (!targetGroup?.is_active) return NextResponse.json({ error: '群組已停用' }, { status: 409 });
+
     // 1. 確保團主使用者存在且記錄真實 LINE 暱稱與頭像（絕不覆蓋為「團主」）
     let hostDisplayName = host_name?.trim();
     let hostPicUrl: string | null = null;
@@ -375,15 +393,7 @@ export async function POST(req: NextRequest) {
       { onConflict: 'line_user_id' }
     );
 
-    // 2. 如果有 group_id，確保群組記錄存在
-    if (group_id) {
-      await supabaseAdmin.from('groups').upsert({
-        group_id,
-        is_active: true,
-      });
-    }
-
-    // 3. 建立場次 (確保日期時間以台灣時區標準化存入 TIMESTAMPTZ)
+    // 2. 建立場次 (確保日期時間以台灣時區標準化存入 TIMESTAMPTZ)
     const baseFee = Number(fee) || 200;
     const parsedSeasonalFee = seasonal_fee !== undefined && seasonal_fee !== null && !isNaN(Number(seasonal_fee))
       ? Number(seasonal_fee)
@@ -610,9 +620,10 @@ export async function PATCH(req: NextRequest) {
       existingSession.host_user_id === callerUserId
     );
 
-    if (!isHostOwner && !isSuperAdminUser) {
+    if (!isSuperAdminUser && (!isHostOwner || !existingSession.group_id ||
+      !(await hasHostGroupPermission(callerUserId, existingSession.group_id)))) {
       return NextResponse.json(
-        { error: '權限不足：只有此場次的原始主揪團主或超級管理員可以管理該場次' },
+        { error: '權限不足：只有此群組已授權的原始主揪或超級管理員可管理場次' },
         { status: 403 }
       );
     }
@@ -779,7 +790,7 @@ export async function DELETE(req: NextRequest) {
     // 查詢目標場次
     const { data: session, error: sErr } = await supabaseAdmin
       .from('match_sessions')
-      .select('id, title, host_user_id')
+      .select('id, title, host_user_id, group_id')
       .eq('id', id)
       .single();
 
@@ -794,9 +805,10 @@ export async function DELETE(req: NextRequest) {
       session.host_user_id === callerUserId
     );
 
-    if (!isHostOwner && !isSuperAdminUser) {
+    if (!isSuperAdminUser && (!isHostOwner || !session.group_id ||
+      !(await hasHostGroupPermission(callerUserId, session.group_id)))) {
       return NextResponse.json(
-        { error: '權限不足：只有此場次的原始主揪團主或超級管理員可以刪除場次' },
+        { error: '權限不足：只有此群組已授權的原始主揪或超級管理員可刪除場次' },
         { status: 403 }
       );
     }

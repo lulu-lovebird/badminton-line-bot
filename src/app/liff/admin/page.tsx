@@ -104,6 +104,7 @@ function formatTimeOnly(dtStr: string): string {
 function AdminDashboardContent() {
   const searchParams = useSearchParams();
   const urlGroupId = searchParams.get('groupId') || '';
+  const [selectedGroupId, setSelectedGroupId] = useState(urlGroupId);
 
   const [activeTab, setActiveTab] = useState<'sessions' | 'create' | 'members'>('sessions');
   const [sessions, setSessions] = useState<MatchSession[]>([]);
@@ -156,6 +157,7 @@ function AdminDashboardContent() {
   const [broadcastMsg, setBroadcastMsg] = useState('');
   const [isBroadcasting, setIsBroadcasting] = useState(false);
   const [availableGroups, setAvailableGroups] = useState<{ group_id: string; group_name: string }[]>([]);
+  const [applicationGroups, setApplicationGroups] = useState<{ group_id: string; group_name: string }[]>([]);
 
   // 代報名表單狀態
   const [proxyName, setProxyName] = useState('');
@@ -439,7 +441,7 @@ function AdminDashboardContent() {
     checkAdminAuth();
   }, []);
 
-  async function checkAdminAuth() {
+  async function checkAdminAuth(targetGroupId?: string) {
     setLoading(true);
     setAuthError('');
     try {
@@ -472,36 +474,31 @@ function AdminDashboardContent() {
       if (res.ok) {
         const user = await res.json();
         setUserProfile(user);
-        if (user.role === 'host' || user.role === 'admin' || user.is_super_admin) {
+        const contextGroupId = liff?.getContext()?.groupId || '';
+        const requestedId = targetGroupId ?? (urlGroupId || contextGroupId);
+        const [groupRes, candidateRes, appRes] = await Promise.all([
+          fetch('/api/groups', { headers }),
+          fetch('/api/groups?forApplication=true', { headers }),
+          fetch(`/api/host-applications?userId=${encodeURIComponent(user.line_user_id)}`, { headers }),
+        ]);
+        if (!groupRes.ok || !candidateRes.ok || !appRes.ok) throw new Error('無法讀取群組授權或申請記錄');
+        const grantedGroups: { group_id: string; group_name: string }[] = await groupRes.json();
+        const candidateGroups: { group_id: string; group_name: string }[] = await candidateRes.json();
+        const appData = await appRes.json();
+        const chosenId = requestedId || (grantedGroups.length === 1 ? grantedGroups[0].group_id : '');
+        setSelectedGroupId(chosenId);
+        setAvailableGroups(grantedGroups);
+        setApplication(appData.applications?.find((a: { group_id: string }) => a.group_id === chosenId) || null);
+        setForm((prev) => ({ ...prev, group_id: chosenId && grantedGroups.some((g) => g.group_id === chosenId) ? chosenId : '' }));
+        setApplicationGroups(candidateGroups);
+        if ((user.role === 'admin' || user.is_super_admin || grantedGroups.some((g) => g.group_id === chosenId)) && chosenId) {
           setIsAuthorized(true);
-          await fetchSessions(token, user.line_user_id, false, user);
-          // 載入可用羽球群組供開團選取
-          try {
-            const gRes = await fetch('/api/groups');
-            if (gRes.ok) {
-              const gList = await gRes.json();
-              setAvailableGroups(gList);
-              if (!urlGroupId && gList.length > 0) {
-                setForm((prev) => ({ ...prev, group_id: prev.group_id || gList[0].group_id }));
-              }
-            }
-          } catch {}
-          return;
+          await fetchSessions(token, user.line_user_id, false, user, chosenId);
         } else {
-          setAuthError(`您的身分目前是【一般球友】(ID: ${user.line_user_id})，尚未取得團主開團權限。`);
+          setAuthError(chosenId ? '尚未取得此群組的開團權限。' : '請先選擇您要申請的群組。');
           setIsAuthorized(false);
-          // 查詢該球友是否已有團主申請紀錄
-          try {
-            const appRes = await fetch(`/api/host-applications?userId=${user.line_user_id}`, { headers });
-            if (appRes.ok) {
-              const appData = await appRes.json();
-              if (appData.applications && appData.applications.length > 0) {
-                setApplication(appData.applications[0]);
-              }
-            }
-          } catch {}
-          return;
         }
+        return;
       } else {
         const errJson = await res.json().catch(() => ({}));
         setAuthError(errJson.error || '身分驗證失敗');
@@ -520,7 +517,8 @@ function AdminDashboardContent() {
     token?: string,
     userId?: string,
     forceRefresh = false,
-    currentUserObj?: { line_user_id: string; role: string; is_super_admin?: boolean } | null
+    currentUserObj?: { line_user_id: string; role: string; is_super_admin?: boolean } | null,
+    filterGroupId?: string
   ) {
     setLoadingSessions(true);
     try {
@@ -534,7 +532,7 @@ function AdminDashboardContent() {
       else headers['x-test-user-id'] = 'host_admin_001';
 
       const params = new URLSearchParams();
-      if (urlGroupId) params.append('groupId', urlGroupId);
+      if (filterGroupId || selectedGroupId || urlGroupId) params.append('groupId', filterGroupId || selectedGroupId || urlGroupId);
       if (forceRefresh) params.append('refresh', 'true');
 
       // 判斷是否為超級管理員 (同步優先讀取 activeUser，避免 React setState 非同步閉包尚未生效)
@@ -718,7 +716,10 @@ function AdminDashboardContent() {
     }
     setLoadingMembers(true);
     try {
-      const res = await fetch(`/api/groups/members?groupId=${targetGroupId}`);
+      const headers: Record<string, string> = {};
+      if (idToken) headers['Authorization'] = `Bearer ${idToken}`;
+      else if (userProfile?.line_user_id) headers['x-test-user-id'] = userProfile.line_user_id;
+      const res = await fetch(`/api/groups/members?groupId=${encodeURIComponent(targetGroupId)}`, { headers });
       if (res.ok) {
         const list: GroupMembership[] = await res.json();
         setGroupMembers(Array.isArray(list) ? list : []);
@@ -741,7 +742,10 @@ function AdminDashboardContent() {
     }
     setLoadingHistory(true);
     try {
-      const res = await fetch(`/api/groups/members?groupId=${targetGroupId}&action=history_players`);
+      const headers: Record<string, string> = {};
+      if (idToken) headers['Authorization'] = `Bearer ${idToken}`;
+      else if (userProfile?.line_user_id) headers['x-test-user-id'] = userProfile.line_user_id;
+      const res = await fetch(`/api/groups/members?groupId=${encodeURIComponent(targetGroupId)}&action=history_players`, { headers });
       if (res.ok) {
         const list = await res.json();
         setHistoryPlayers(Array.isArray(list) ? list : []);
@@ -759,7 +763,7 @@ function AdminDashboardContent() {
       fetchGroupMembers(form.group_id);
       fetchHistoryPlayers(form.group_id);
     }
-  }, [form.group_id]);
+  }, [form.group_id, idToken, userProfile?.line_user_id]);
 
   // 方案 B: 快速設為固定咖
   async function handleFastSaveRegular() {
@@ -920,7 +924,7 @@ function AdminDashboardContent() {
   }
 
   async function handleApplyHost() {
-    if (!userProfile?.line_user_id) return;
+    if (!userProfile?.line_user_id || !selectedGroupId) return;
     setIsApplying(true);
     try {
       const headers: Record<string, string> = { 'Content-Type': 'application/json' };
@@ -931,8 +935,7 @@ function AdminDashboardContent() {
         method: 'POST',
         headers,
         body: JSON.stringify({
-          user_id: userProfile.line_user_id,
-          display_name: userProfile.display_name,
+          group_id: selectedGroupId,
           reason: applyReason.trim(),
         }),
       });
@@ -1021,8 +1024,21 @@ function AdminDashboardContent() {
           </div>
         )}
 
+        <div className="mt-3 w-full p-3 bg-white border border-slate-200 rounded-xl text-left text-xs">
+          <label className="block font-bold mb-1">申請開團的 LINE 群組</label>
+          <select value={selectedGroupId} onChange={(e) => checkAdminAuth(e.target.value)} className="w-full p-2 border rounded-lg">
+            <option value="">請選擇群組</option>
+            {applicationGroups.map((g) => (
+              <option key={g.group_id} value={g.group_id}>{g.group_name || g.group_id}</option>
+            ))}
+          </select>
+          {selectedGroupId && !applicationGroups.some((g) => g.group_id === selectedGroupId) && (
+            <p className="text-red-600 mt-1">連結中的群組不存在或已停用，請從群組選單重新選擇。</p>
+          )}
+        </div>
+
         {/* 申請成為團主表單 (未申請或被駁回時可填寫) */}
-        {!isPending && (
+        {!isPending && !!selectedGroupId && applicationGroups.some((g) => g.group_id === selectedGroupId) && (
           <div className="mt-3 p-3.5 bg-white rounded-2xl border border-slate-200 text-left text-xs w-full shadow-sm space-y-2.5">
             <div className="font-bold text-slate-800 flex items-center gap-1.5">
               <UserPlus size={15} className="text-emerald-600" />
@@ -1183,7 +1199,7 @@ function AdminDashboardContent() {
             <label className="text-xs font-semibold text-slate-600 flex items-center justify-between">
               <span>發布推播目標群組</span>
               {form.group_id ? (
-                <span className="text-[11px] text-emerald-600 font-medium">✓ 開團後將自動發送卡片至該群</span>
+                <span className="text-[11px] text-emerald-600 font-medium">✓ 已選擇開團群組（推播另依開關）</span>
               ) : (
                 <span className="text-[11px] text-amber-600 font-medium">⚠️ 尚未選擇目標群組</span>
               )}
@@ -1200,7 +1216,7 @@ function AdminDashboardContent() {
                       🏸 {g.group_name || '羽球社團群組'}
                     </option>
                   ))}
-                  <option value="">🚫 僅建立場次（不推播至任何群組）</option>
+                  <option value="">請選擇已授權群組</option>
                 </>
               ) : (
                 <option value="">尚無可用群組 (僅建立場次)</option>

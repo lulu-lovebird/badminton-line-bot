@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 import { lineClient, createSessionFlexMessage } from '@/lib/line';
+import { getAuthenticatedUserId, hasHostGroupPermission, isGlobalAdmin } from '@/lib/host-permissions';
 
 // 團主通知 API：支援推播群組開團卡片 或 向場次球友發送私訊通知
 export async function POST(req: NextRequest) {
@@ -22,12 +23,19 @@ export async function POST(req: NextRequest) {
     if (!session) {
       return NextResponse.json({ error: '場次不存在' }, { status: 404 });
     }
+    const caller = await getAuthenticatedUserId(req);
+    if (!caller) return NextResponse.json({ error: '請先登入' }, { status: 401 });
+    const admin = await isGlobalAdmin(caller);
+    if (!admin && (session.host_user_id !== caller || !session.group_id ||
+      !(await hasHostGroupPermission(caller, session.group_id)))) {
+      return NextResponse.json({ error: '無權通知此場次球友' }, { status: 403 });
+    }
 
     // 動作 A: 將該場次的 Flex Card 推播 / 補發到指定的 LINE 群組
     if (action === 'push_card_to_group') {
       const destinationGroupId = target_group_id || session.group_id;
-      if (!destinationGroupId) {
-        return NextResponse.json({ error: '請指定要推播的目標 LINE 群組' }, { status: 400 });
+      if (!destinationGroupId || destinationGroupId !== session.group_id) {
+        return NextResponse.json({ error: '推播僅限原場次群組' }, { status: 400 });
       }
 
       // 取得團主姓名與頭像
@@ -62,14 +70,6 @@ export async function POST(req: NextRequest) {
         to: destinationGroupId,
         messages: [flexMsg],
       });
-
-      // 同步更新 session.group_id
-      if (session.group_id !== destinationGroupId) {
-        await supabaseAdmin
-          .from('match_sessions')
-          .update({ group_id: destinationGroupId })
-          .eq('id', session.id);
-      }
 
       return NextResponse.json({ success: true, message: '🎉 開團卡片已成功推播至群組！' });
     }

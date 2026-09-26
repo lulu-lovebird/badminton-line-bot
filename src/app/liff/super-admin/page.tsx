@@ -3,7 +3,7 @@
 import React, { useState, useEffect, Suspense } from 'react';
 import Link from 'next/link';
 import { Shield, Users, Layers, Power, LogOut, CheckCircle, XCircle, RefreshCw, AlertTriangle, Key, ArrowLeft, MailCheck, Clock, Check, X, Copy, MessageSquare } from 'lucide-react';
-import { User, Group, HostApplication } from '@/types/database';
+import { User, Group, HostApplication, HostGroupPermission } from '@/types/database';
 import { initLiff } from '@/lib/liff-client';
 
 function SuperAdminContent() {
@@ -11,6 +11,10 @@ function SuperAdminContent() {
   const [groups, setGroups] = useState<Group[]>([]);
   const [users, setUsers] = useState<User[]>([]);
   const [applications, setApplications] = useState<HostApplication[]>([]);
+  const [hostGroups, setHostGroups] = useState<HostGroupPermission[]>([]);
+  const [permissionUserId, setPermissionUserId] = useState('');
+  const [permissionGroupId, setPermissionGroupId] = useState('');
+  const [editingPermissionId, setEditingPermissionId] = useState<string | null>(null);
   const [pendingCount, setPendingCount] = useState<number>(0);
   const [appFilter, setAppFilter] = useState<'all' | 'pending' | 'reviewed'>('pending');
   const [loading, setLoading] = useState(true);
@@ -104,14 +108,16 @@ function SuperAdminContent() {
     else headers['x-test-user-id'] = 'super_admin_001';
 
     try {
-      const [groupsRes, usersRes, appsRes, quotaRes] = await Promise.all([
+      const [groupsRes, usersRes, appsRes, quotaRes, permissionsRes] = await Promise.all([
         fetch('/api/admin/groups', { headers }),
         fetch('/api/admin/users', { headers }),
         fetch('/api/host-applications', { headers }),
         fetch('/api/admin/quota', { headers }),
+        fetch('/api/admin/host-groups', { headers }),
       ]);
 
       if (groupsRes.ok) setGroups(await groupsRes.json());
+      if (permissionsRes.ok) setHostGroups(await permissionsRes.json());
       if (usersRes.ok) setUsers(await usersRes.json());
       if (appsRes.ok) {
         const appData = await appsRes.json();
@@ -237,28 +243,32 @@ function SuperAdminContent() {
     }
   }
 
-  async function handleRoleChange(userId: string, targetRole: 'member' | 'host' | 'admin') {
+  async function savePermission() {
+    if (!permissionUserId || !permissionGroupId) return alert('請選擇團主及群組');
     const headers: Record<string, string> = { 'Content-Type': 'application/json' };
     if (idToken) headers['Authorization'] = `Bearer ${idToken}`;
     else headers['x-test-user-id'] = 'super_admin_001';
+    const res = await fetch('/api/admin/host-groups', {
+      method: editingPermissionId ? 'PATCH' : 'POST', headers,
+      body: JSON.stringify({ id: editingPermissionId, user_id: permissionUserId, group_id: permissionGroupId }),
+    });
+    if (!res.ok) return alert((await res.json()).error || '儲存失敗');
+    setEditingPermissionId(null);
+    setPermissionUserId('');
+    setPermissionGroupId('');
+    await loadData();
+  }
 
-    try {
-      const res = await fetch('/api/admin/users', {
-        method: 'PATCH',
-        headers,
-        body: JSON.stringify({
-          line_user_id: userId,
-          role: targetRole,
-        }),
-      });
-      if (res.ok) {
-        setUsers((prev) =>
-          prev.map((u) => (u.line_user_id === userId ? { ...u, role: targetRole } : u))
-        );
-      }
-    } catch (e) {
-      console.error(e);
-    }
+  async function deletePermission(permission: HostGroupPermission) {
+    if (!window.confirm(`確定撤銷 ${permission.display_name} 對 ${permission.group_name} 的開團權限？歷史場次不會刪除。`)) return;
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+    if (idToken) headers['Authorization'] = `Bearer ${idToken}`;
+    else headers['x-test-user-id'] = 'super_admin_001';
+    const res = await fetch('/api/admin/host-groups', {
+      method: 'DELETE', headers, body: JSON.stringify({ id: permission.id }),
+    });
+    if (!res.ok) return alert((await res.json()).error || '撤銷失敗');
+    await loadData();
   }
 
   if (loading) {
@@ -472,7 +482,7 @@ function SuperAdminContent() {
               : 'text-slate-600 hover:bg-slate-50'
           }`}
         >
-          <Users size={14} /> 團主名單 ({users.filter((u) => u.role === 'host').length})
+          <Users size={14} /> 團主群組授權 ({hostGroups.length})
         </button>
       </div>
 
@@ -582,6 +592,7 @@ function SuperAdminContent() {
                 </div>
 
                 <div className="bg-slate-50 p-2.5 rounded-xl border border-slate-100 text-xs text-slate-700">
+                  <div className="font-bold text-[10px] text-slate-400 mb-1">申請群組：{app.group_name || app.group_id || '舊版申請（未指定群組）'}</div>
                   <div className="font-bold text-[10px] text-slate-400 mb-1">申請開團說明 / 自述：</div>
                   <p className="leading-relaxed">{app.reason || '(未填寫說明)'}</p>
                 </div>
@@ -691,59 +702,37 @@ function SuperAdminContent() {
             </button>
           </div>
 
-          {loading ? (
-            <div className="text-center py-10 text-xs text-slate-400">載入使用者中...</div>
-          ) : users.length === 0 ? (
-            <div className="text-center py-10 bg-white rounded-2xl border text-xs text-slate-500">
-              尚無使用者紀錄
-            </div>
-          ) : (
-            users.map((u) => (
-              <div
-                key={u.line_user_id}
-                className="bg-white p-3.5 rounded-2xl border border-slate-200 shadow-sm flex items-center justify-between"
-              >
-                <div>
-                  <div className="flex items-center gap-2">
-                    <span className="font-bold text-xs text-slate-800">{u.display_name}</span>
-                    <span
-                      className={`text-[10px] px-2 py-0.2 rounded-full font-bold ${
-                        u.role === 'admin'
-                          ? 'bg-purple-100 text-purple-800'
-                          : u.role === 'host'
-                          ? 'bg-blue-100 text-blue-800'
-                          : 'bg-slate-100 text-slate-600'
-                      }`}
-                    >
-                      {u.role === 'admin' ? '最高管理員' : u.role === 'host' ? '零打團主' : '一般球友'}
-                    </span>
-                  </div>
-                  <div className="text-[10px] text-slate-400 font-mono mt-0.5">
-                    {u.line_user_id.slice(0, 16)}...
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-1.5">
-                  {u.role === 'member' && (
-                    <button
-                      onClick={() => handleRoleChange(u.line_user_id, 'host')}
-                      className="text-xs bg-blue-600 hover:bg-blue-700 text-white font-bold px-2.5 py-1 rounded-lg shadow-sm"
-                    >
-                      設為團主
-                    </button>
-                  )}
-                  {u.role === 'host' && (
-                    <button
-                      onClick={() => handleRoleChange(u.line_user_id, 'member')}
-                      className="text-xs text-red-600 border border-red-200 hover:bg-red-50 font-bold px-2.5 py-1 rounded-lg"
-                    >
-                      撤銷團主
-                    </button>
-                  )}
-                </div>
+          <div className="bg-white p-3 rounded-xl border space-y-2 text-xs">
+            <div className="font-bold">{editingPermissionId ? '修改團主群組授權' : '新增團主群組授權'}</div>
+            <select className="w-full p-2 border rounded" value={permissionUserId} onChange={(e) => setPermissionUserId(e.target.value)}>
+              <option value="">選擇使用者</option>
+              {users.map((u) => <option key={u.line_user_id} value={u.line_user_id}>{u.display_name} ({u.line_user_id})</option>)}
+            </select>
+            <select className="w-full p-2 border rounded" value={permissionGroupId} onChange={(e) => setPermissionGroupId(e.target.value)}>
+              <option value="">選擇群組</option>
+              {groups.filter((g) => g.is_active).map((g) => <option key={g.group_id} value={g.group_id}>{g.group_name || g.group_id}</option>)}
+            </select>
+            <button className="p-2 bg-blue-600 text-white rounded" onClick={savePermission}>{editingPermissionId ? '儲存修改' : '新增授權'}</button>
+            {editingPermissionId && <button className="p-2 ml-2 border rounded" onClick={() => {
+              setEditingPermissionId(null); setPermissionUserId(''); setPermissionGroupId('');
+            }}>取消</button>}
+          </div>
+          {hostGroups.map((permission) => (
+            <div key={permission.id} className="bg-white p-3 rounded-xl border text-xs flex items-center justify-between gap-2">
+              <div>
+                <strong>{permission.display_name}</strong> → {permission.group_name}
+                <div className="text-slate-400 break-all">{permission.user_id} / {permission.group_id}</div>
               </div>
-            ))
-          )}
+              <div className="flex gap-2 shrink-0">
+                <button className="text-blue-700" onClick={() => {
+                  setEditingPermissionId(permission.id);
+                  setPermissionUserId(permission.user_id);
+                  setPermissionGroupId(permission.group_id);
+                }}>修改</button>
+                <button className="text-red-700" onClick={() => deletePermission(permission)}>刪除</button>
+              </div>
+            </div>
+          ))}
         </div>
       )}
     </main>

@@ -48,6 +48,10 @@
 
 ---
 
+### 團主群組授權資料庫更新
+
+既有 Supabase 專案需在 SQL Editor 執行 [`supabase/migrations/20260924_host_group_permissions.sql`](supabase/migrations/20260924_host_group_permissions.sql)，完成後才部署此版程式。新建專案使用更新後的 `supabase/schema.sql` 即可。舊有 `users.role = 'host'` 不會自動取得任何群組授權；最高管理後台可按「團主群組授權」逐筆新增、修改或刪除。
+
 ## 💡 LINE 200 則免費額度保護機制 (Zero-Quota Architecture)
 
 LINE 官方帳號免費方案（Free Plan）每個月僅提供 **200 則主動推播（Push Message）**。在群組營運時，若 Bot 主動向群組推播，**發送 1 次訊息就會乘上群內人數（例：50 人群組推播 1 次扣 50 則）**，開 4 次團就會導致整個月額度歸零！

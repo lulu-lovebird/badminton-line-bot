@@ -82,10 +82,15 @@ function JoinRegularContent() {
 
   // 檢查是否已是固定咖
   useEffect(() => {
-    if (!groupId || !userProfile?.userId) return;
+    const profileId = userProfile?.userId;
+    if (!groupId || !profileId) return;
+    const checkedProfileId = profileId;
     async function checkMembership() {
       try {
-        const res = await fetch(`/api/groups/members?groupId=${groupId}&regularOnly=true`);
+        const headers: Record<string, string> = {};
+        if (idToken) headers['Authorization'] = `Bearer ${idToken}`;
+        else headers['x-test-user-id'] = checkedProfileId;
+        const res = await fetch(`/api/groups/members?groupId=${encodeURIComponent(groupId)}&regularOnly=true&userId=${encodeURIComponent(checkedProfileId)}`, { headers });
         if (res.ok) {
           const members = await res.json();
           if (Array.isArray(members)) {
@@ -100,7 +105,7 @@ function JoinRegularContent() {
       }
     }
     checkMembership();
-  }, [groupId, userProfile]);
+  }, [groupId, userProfile, idToken]);
 
   const handleRegister = async () => {
     if (!groupId || !userProfile?.userId) return;
