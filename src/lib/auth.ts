@@ -29,10 +29,12 @@ export function isSuperAdmin(lineUserId?: string | null): boolean {
  * 僅接受 LINE 官方驗證通過的 ID Token；未驗證的 JWT payload 不得作為身分依據
  */
 export async function verifyLineIdToken(idToken: string): Promise<LineTokenVerifyResponse | null> {
-  const channelId = process.env.LINE_CHANNEL_ID;
-  if (!idToken) return null;
+  // ID Token 屬於 LIFF 所在的 LINE Login Channel，不能用 Messaging API Channel ID 驗證。
+  const liffId = process.env.LINE_LIFF_ID || process.env.NEXT_PUBLIC_LIFF_ID || '';
+  const channelId = liffId.split('-')[0];
+  if (!idToken || !/^\d+$/.test(channelId) || !liffId.includes('-')) return null;
 
-  // 1. 優先嘗試 LINE 官方驗證端點
+  // 只信任 LINE 官方驗證端點，不解碼未驗證的 JWT。
   if (channelId) {
     try {
       const params = new URLSearchParams();
@@ -47,7 +49,7 @@ export async function verifyLineIdToken(idToken: string): Promise<LineTokenVerif
 
       if (res.ok) {
         const data: LineTokenVerifyResponse = await res.json();
-        return data;
+        return data.aud === channelId && data.sub ? data : null;
       } else {
         console.warn('LINE 官方 ID Token 驗證未通過');
       }

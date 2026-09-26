@@ -72,6 +72,7 @@
    - 點擊 **Add** 建立完成。
 3. 複製並記錄生成的 **LIFF ID**（格式如 `1234567890-AbCdEfGh`，對應 `LINE_LIFF_ID`）。
    - 對應的 `LINE_LIFF_URL` 即為 `https://liff.line.me/<你的LIFF_ID>`。
+   - LIFF 所屬 Channel 可能與 Messaging API Channel 不同。後端以 `LINE_LIFF_ID` 的數字前綴（LIFF 所屬 Channel ID）向 LINE 官方驗證 ID Token；`LINE_CHANNEL_ID` 保留為 Messaging API 的 Channel ID，**不要**為了修正登入而將兩者硬改成相同值。LIFF Scopes 須勾選 `openid`。
 
 ---
 
