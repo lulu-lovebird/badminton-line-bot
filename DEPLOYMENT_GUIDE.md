@@ -27,7 +27,8 @@
 3. 進入專案左側選單的 **SQL Editor**：
    - 點擊 **"New query"**。
    - 打開專案中的 [`supabase/schema.sql`](supabase/schema.sql)（若未下載程式碼，可[點此直接開啟原始碼複製](https://raw.githubusercontent.com/lulu-lovebird/badminton-line-bot/main/supabase/schema.sql)），**複製全部內容**並貼入 SQL Editor。
-   - 點擊右下角的 **"Run"** 執行。執行成功後，資料表（`users`, `groups`, `match_sessions`, `registrations`）與觸發器即建置完畢。
+   - 點擊右下角的 **"Run"** 執行。新專案會建置 `users`、`groups`、`host_applications`、`host_group_permissions`、`match_sessions`、`registrations` 等資料表。
+   - **升級既有專案**：先備份資料，在 SQL Editor 執行 [`supabase/migrations/20260924_host_group_permissions.sql`](supabase/migrations/20260924_host_group_permissions.sql)，再部署新版程式；不要把既有 `users.role = 'host'` 當成任何群組的授權，也不必為了升級刪掉舊使用者資料。
 4. 取得 Supabase 連線金鑰：
    - 點擊左下角 **Project Settings (齒輪圖示)** -> **API**。
    - 複製並記錄以下三個值：
@@ -171,15 +172,19 @@
 1. 在手機 LINE 建立一個測試群組，將您的「零打小幫手」機器人邀請進群。
 2. 小幫手會自動發送一張「歡迎報到」卡片。
 
-### 測試 2：開團與免額度分享
-1. 在手機打開您的團主管理後台：`https://liff.line.me/<你的LIFF_ID>/admin`。
-2. 建立一個測試場次（正取 8 人、備取 2 人）。
-3. 建立成功後，點擊綠色的 **「📲 分享 Flex 卡片至群組」** 按鈕，喚起社群分享器發送卡片至群組（0 則 Bot 推播額度消耗！）。
+### 測試 2：依群組申請團主並審核
+1. 申請人須加入測試群組，從群內歡迎卡片開啟 LIFF「團主管理後台」；也可從圖文選單進入，但要在申請頁**明確選擇該群名稱**。
+2. 送出申請後，最高管理員在審核列表確認「申請人＋群組」，核准後至「團主群組授權」確認關係已建立。即使使用者已是其他群的團主，新群仍須另申請；最高管理員也可直接在授權列表新增、修改或刪除關係。
+3. 申請人重新開啟後台，確認只能選已獲授權且啟用的群組。
+
+### 測試 3：在對應群組開團並免額度分享
+1. 在手機打開團主管理後台：`https://liff.line.me/<你的LIFF_ID>/admin`。
+2. 在「建立新場次」**明確選擇場次所屬的已授權群組**，建立測試場次（正取 8 人、備取 2 人）；群組不可留空。
+3. 「由 Bot 自動推播至群組」預設關閉：即使已選群組，**建立場次也不會自動向群組推播**。建立後用 LIFF 分享卡片或複製報名連結，自行發到該場次的群組（0 則 Bot 主動推播額度）；如選擇開啟 Bot 推播，則會消耗 LINE 額度。
 4. 點擊卡片上的「立即報名」，測試正取與備取排隊流程。
 
-### 測試 3：超級管理員後台
-1. 在手機打開超級管理後台：`https://liff.line.me/<你的LIFF_ID>/super-admin`。
-2. 您可以檢視已加入的群組與全系統球友，並具備一鍵停用群組、強制機器人退群與升降團主權限！
+### 測試 4：超級管理員後台
+在手機打開 `https://liff.line.me/<你的LIFF_ID>/super-admin`，可檢視群組及團主對應關係、依群組審核申請，並在「團主群組授權」直接新增、修改、刪除授權。刪除授權不會清除歷史場次。
 
 ---
 

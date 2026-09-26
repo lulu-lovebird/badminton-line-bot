@@ -191,7 +191,7 @@ export default function HostGuidePage() {
               <div>
                 <strong className="text-slate-900 font-bold">確認群組啟用狀態：</strong>
                 <p className="mt-1 text-xs sm:text-sm text-slate-600 leading-relaxed">
-                  小幫手進群後，群組預設為啟用狀態。若需確認，可在群組傳送 <code className="bg-slate-100 text-emerald-800 px-1.5 py-0.5 rounded font-mono text-xs sm:text-sm font-semibold">!id</code> 或由最高管理員於管理後台確認授權。
+                  小幫手進群後，群組預設為啟用。請從群內歡迎卡片進入 JuJu，連結會帶入該群組；若從一對一圖文選單進入，請在團主後台自行確認要申請的群組名稱。您本人也必須是該 LINE 群組成員。
                 </p>
               </div>
             </div>
@@ -206,13 +206,13 @@ export default function HostGuidePage() {
             </div>
             <div>
               <h2 className="text-lg sm:text-2xl font-black text-slate-900">第二步：申請開團團主權限</h2>
-              <p className="text-xs sm:text-sm text-slate-500 mt-0.5">一般球友升級為開團團主的審核流程</p>
+              <p className="text-xs sm:text-sm text-slate-500 mt-0.5">每個群組分別申請、分別授權</p>
             </div>
           </div>
 
           <div className="space-y-4 text-sm sm:text-base text-slate-700 leading-relaxed">
             <p>
-              為了維護社團秩序與開團品質，系統採用「團主實名審核制」。一般球友無法隨意開團，必須先提出申請：
+              團主權限綁定「LINE 使用者＋指定群組」，不是取得一次身分就能在所有群組開團。每個新群組都需要分別申請並獲核准，或由最高管理員直接授權：
             </p>
 
             <div className="bg-slate-50 rounded-2xl p-5 border border-slate-200 space-y-3">
@@ -225,16 +225,16 @@ export default function HostGuidePage() {
                   打開小幫手官方帳號一對一私訊，點擊底部圖文選單右下角「<strong>⚙️ 團主後台</strong>」（或進入導航大廳點擊團主後台）。
                 </li>
                 <li>
-                  因尚未具備團主身分，系統會顯示「身分驗證提醒」，並提供「<strong>📨 申請開通團主權限</strong>」區塊。
+                  若尚未取得<strong>目前群組</strong>的授權，後台會顯示申請表單；即使已能在另一個群組開團，仍須為新群組提出申請。
                 </li>
                 <li>
-                  在輸入框填寫開團規劃（例：<em>預計每週二晚上在永和運動中心開團雙打</em>），點擊「<strong>送出申請</strong>」。
+                  在「<strong>申請開團的 LINE 群組</strong>」確認群組名稱（從私訊進入時請自行選擇），填寫開團規劃後點擊「<strong>📨 申請成為開團團主</strong>」。請勿選錯舊群組。
                 </li>
                 <li>
-                  送出後，系統最高管理員將立即收到審核通知；審核通過後，JuJu 會<strong>主動以 LINE 私訊發送核准通知</strong>給您！
+                  最高管理員在審核頁看到申請人與對應群組，核准後會建立該群授權並嘗試以 LINE 私訊通知您；您也可以請最高管理員在「團主群組授權」直接新增授權。
                 </li>
                 <li>
-                  收到核准通知後，再次點擊「⚙️ 團主後台」，即可正式啟用後台所有開團管理功能！
+                  重新進入後台，確認群組已列於可選清單；授權只適用於該群，不會自動延伸到其他群組。
                 </li>
               </ol>
             </div>
@@ -249,7 +249,7 @@ export default function HostGuidePage() {
             </div>
             <div>
               <h2 className="text-lg sm:text-2xl font-black text-slate-900">第三步：建立並發布新零打場次</h2>
-              <p className="text-xs sm:text-sm text-slate-500 mt-0.5">一鍵產生視覺化 Flex 卡片並自動推播至群組</p>
+              <p className="text-xs sm:text-sm text-slate-500 mt-0.5">先指定場次歸屬群組，再決定是否分享或付費推播</p>
             </div>
           </div>
 
@@ -260,9 +260,9 @@ export default function HostGuidePage() {
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 text-xs sm:text-sm">
               <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 space-y-1.5">
-                <span className="font-bold text-slate-900 text-sm">📢 發布推播目標群組</span>
+                <span className="font-bold text-slate-900 text-sm">🏸 場次歸屬群組（必選）</span>
                 <p className="text-slate-600 leading-relaxed">
-                  下拉選單會自動列出您所在的啟用群組（系統會自動為您預選）。開團成功後，卡片將直接推播到該群組！亦可選「不推播僅上架」。
+                  在「發布推播目標群組」下拉選單明確選擇這場球所屬的群組；選項只包含您已獲授權且啟用的群組。場次與報名名單會歸屬於該群，不能留空或借用另一群的授權。是否由 Bot 推播另由獨立開關決定（預設關閉）。
                 </p>
               </div>
 
@@ -303,10 +303,9 @@ export default function HostGuidePage() {
             <div className="p-4 bg-emerald-50 rounded-2xl border border-emerald-200 text-xs sm:text-sm text-emerald-950 flex items-start gap-3">
               <CheckCircle2 size={20} className="text-emerald-600 shrink-0 mt-0.5" />
               <div>
-                <strong className="font-bold text-emerald-900">點擊「🚀 立即建立並發布」：</strong>
+                <strong className="font-bold text-emerald-900">點擊「立即建立新零打場次」：</strong>
                 <p className="mt-1 leading-relaxed">
-                  系統將即刻在指定群組發布帶有全新 JuJu
-                  運動形象圖、時間地點、費用與主揪名稱的精美卡片。群組球友只要點擊卡片上的「<strong>立即報名零打 🏸</strong>」，即可一鍵秒速卡位！
+                  場次會建立在選定群組下，但<strong>不會因選了群組就自動推播</strong>。建議建立後使用分享卡片或複製報名連結，由團主自行貼到該群（不扣 Bot 主動推播額度）；只有主動開啟「由 Bot 自動推播至群組」才會由 Bot 發送並消耗額度。
                 </p>
               </div>
             </div>
@@ -457,7 +456,7 @@ export default function HostGuidePage() {
                   群組卡片補發 / 重發
                 </strong>
                 <p className="text-slate-600 leading-relaxed">
-                  若開團建立時忘記選群組，或想在群組中再次提醒球友，只需在場次卡片點選「<strong>📢 推播卡片</strong>」或進入詳細頁點選「<strong>立即推播/補發卡片</strong>」，系統便會立刻將該場次卡片重新送至群組。
+                  場次建立時必須先指定歸屬群組。若建立後想再提醒球友，請優先使用分享卡片或複製連結，自行貼至<strong>該場次所屬群組</strong>；如使用 Bot 補發卡片，僅能推播至原場次群組，並會消耗 LINE 主動推播額度。
                 </p>
               </div>
 
@@ -521,7 +520,7 @@ export default function HostGuidePage() {
                 <ul className="list-disc pl-5 space-y-1.5 text-slate-700 leading-relaxed">
                   <li><strong>二次防呆確認</strong>：點擊後系統會彈出確認視窗，避免手滑誤觸。</li>
                   <li><strong>級聯連帶清理</strong>：系統自資料庫將該場次及<strong>其下所有球友報名與候補記錄全部清除</strong>，立即釋放資料庫空間。</li>
-                  <li><strong>嚴密權限保護</strong>：僅有該場次的「原始開團團主本人」或「最高管理員 (Super Admin)」才有權限刪除。</li>
+                  <li><strong>嚴密權限保護</strong>：僅有仍獲該群授權的原始開團團主，或最高管理員 (Super Admin) 可刪除群組場次。</li>
                   <li><strong>歷史場次支援</strong>：打完結束的歷史過期場次，團主亦可在後台隨時手動點擊刪除。</li>
                 </ul>
               </div>
@@ -565,7 +564,7 @@ export default function HostGuidePage() {
             <div className="p-4 sm:p-5 bg-slate-50 rounded-2xl border border-slate-200 space-y-1.5">
               <div className="font-bold text-slate-900 text-sm sm:text-base">Q2：為什麼我開團後，群組沒有收到卡片？</div>
               <p className="text-slate-600 text-xs sm:text-sm leading-relaxed">
-                請確認開團表單頂部的「<strong>發布推播目標群組</strong>」是否有選取您的球群（若選為「僅建立場次」，則不會推播）。若未推播，隨時可在後台該場次點選「<strong>📢 立即推播/補發卡片</strong>」隨時補送！
+                選擇群組只決定場次歸屬，不代表 Bot 會推播。建立時「由 Bot 自動推播至群組」預設關閉；可在建團成功後自行將分享卡片或報名連結貼到<strong>該場次群組</strong>，不消耗 Bot 推播額度。
               </p>
             </div>
 

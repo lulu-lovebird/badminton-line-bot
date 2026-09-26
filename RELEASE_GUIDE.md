@@ -72,8 +72,10 @@ flowchart TD
 ### 步驟 2：Beta 整合與實機測試 (Beta Verification)
 1. PR 合併進 `beta` 分支後，Vercel 會自動部署至：  
    `https://badminton-line-bot-beta.vercel.app`。
-2. 進入維護團隊的「**羽球內部測試群**」進行驗證：
-   - 測試團主開團 ➔ 點擊發送 Flex 卡片。
+2. 先確認 Beta 的 **Vercel Preview 部署成功且實際網址可存取**，並確認 LIFF/Webhook/資料庫皆指向 Beta 資源；不要只依照表格中的範例域名判定 Beta 已上線。
+3. 進入維護團隊的「**羽球內部測試群**」進行驗證：
+   - 將小幫手加入群組，讓群成員從群內連結申請團主；最高管理員審核時確認「申請人＋群組」正確。再測試最高管理員直接新增、修改、刪除團主與群組的授權。
+   - 團主在「建立新場次」明確選擇**已授權的歸屬群組**，驗證不能在未授權群組開團。Bot 自動推播預設關閉；在測試群用個人分享卡片或複製連結測試，避免誤推播正式群。
    - 測試球友報名、滿額自動候補。
    - 測試正取取消 ➔ 驗收是否收到私訊候補遞補通知。
    - 測試團主現場收款對帳與名冊權限。
@@ -82,9 +84,11 @@ flowchart TD
 1. 確定功能驗收無誤後，在 GitHub 上發起發布 PR：  
    **`beta` ➔ `main`**（標題例如：`Release v1.1.0`）。
 2. **資料庫遷移檢查（若有新增 SQL 欄位）**：
-   - 登入 Supabase 正式專案的 SQL Editor，執行向後相容的遷移腳本。
+   - 先備份並核對正式 Supabase 專案；已建庫升級團主群組授權時，在 SQL Editor 執行 [`supabase/migrations/20260924_host_group_permissions.sql`](supabase/migrations/20260924_host_group_permissions.sql)，再合併新版程式。新專案直接用 `supabase/schema.sql`。
+   - 遷移不會自動把舊 `users.role = 'host'` 賦予任一群組權限；由最高管理員審核申請或逐筆新增授權。
 3. **合併 PR 至 `main`**：
-   - Vercel 將自動觸發 Production Build，約 1 分鐘內正式更新。
+   - Vercel 將自動觸發 Production Build；以 Vercel 部署狀態與實際網址驗證，不只依賴推送成功訊息。
+   - 正式驗收：團主申請頁顯示正確群組、最高管理員可看到人員與群組的對應、開場次須選已授權群組且預設不推播。
 4. **建立 Git 版本標籤 (Git Tag)**：
    ```bash
    git checkout main

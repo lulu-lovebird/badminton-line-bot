@@ -77,26 +77,20 @@
 
 系統採用 **單一 Bot 多群共用模式**，無需為各群組申請不同的 LINE 機器人：
 1. **加入事件捕獲**：小幫手被拉進群組時，Webhook 自動捕獲 `join` 事件，將 `groupId` 記錄至 `groups` 資料表，並發送該群專屬歡迎卡片。
-2. **場次資料隔離**：每筆場次 (`match_sessions`) 綁定特定 `group_id`。
-   - A 群成員點開清單時，網址帶有 `?groupId=A`，**只會看到 A 群開的場次**。
-   - B 群開團訊息**只會推播至 B 群**，絕不跨群串線。
+2. **申請與場次資料隔離**：群內歡迎連結帶 `?groupId=...`，團主申請須選定群組；每筆新場次 (`match_sessions`) 必須綁定已獲授權的 `group_id`。
+   - A 群團主不得只靠全域 `users.role = 'host'` 在 B 群開團；群組權限以 `host_group_permissions` 為準。
+   - 選群組是指定場次歸屬；Bot 推播預設關閉，若選擇推播則只能送往該場次的原群組。
 3. **跨群行程整合**：同位球友若同時加入多個羽球群組，在小幫手私訊查看「我的報名記錄」時，系統能整合其所有群組的行程，並統一進行時間衝突偵測。
 
 ---
 
 ## 4. 使用者角色與權限模型 (RBAC)
 
-系統定義三級權限架構：
+身分與可操作的群組是兩個維度：
 
-```
-[ 一般球友 member ] ──> 可報名、備取、查看個人行程、取消個人名額
-         │
-         ▼ (由超級管理員授權)
-[ 零打團主 host ]   ──> 可開場次、查看完整名單、手動代報名、對帳收款切換、場次緊急推播
-         │
-         ▼ (由 .env SUPER_ADMIN_LINE_IDS 設定)
-[ 最高管理員 admin ] ──> 可查看所有群組、一鍵暫停群組服務、強制退群、開通/撤銷團主權限
-```
+- **一般球友 `member`**：報名、候補、查看個人行程與取消本人名額。
+- **團主 `host`**：先選擇目標群組申請；需為該群 LINE 成員，審核通過後新增 `(user_id, group_id)` 授權。一人可管理多群，一群可有多名團主，但每個群組都要個別授權。全域 `role = 'host'` **單獨不足以開團**，不能沿用舊測試群權限。
+- **最高管理員 `admin`**：可審核帶群組的申請、直接新增／修改／刪除團主與群組的授權、停用群組或退群。`SUPER_ADMIN_LINE_IDS` 中的使用者可取得最高管理權限。
 
 ---
 
@@ -108,6 +102,10 @@
 erDiagram
     USERS ||--o{ MATCH_SESSIONS : "開團 (host)"
     GROUPS ||--o{ MATCH_SESSIONS : "歸屬於"
+    USERS ||--o{ HOST_APPLICATIONS : "申請開團"
+    GROUPS ||--o{ HOST_APPLICATIONS : "申請目標"
+    USERS ||--o{ HOST_GROUP_PERMISSIONS : "取得授權"
+    GROUPS ||--o{ HOST_GROUP_PERMISSIONS : "授權團主"
     USERS ||--o{ REGISTRATIONS : "報名 (user)"
     MATCH_SESSIONS ||--o{ REGISTRATIONS : "包含名額"
 
@@ -129,9 +127,23 @@ erDiagram
         timestamp updated_at
     }
 
+    HOST_APPLICATIONS {
+        uuid id PK
+        string user_id FK "申請者"
+        string group_id FK "申請群組 (舊資料可能為 NULL)"
+        string status "pending / approved / rejected"
+    }
+
+    HOST_GROUP_PERMISSIONS {
+        uuid id PK
+        string user_id FK "授權團主"
+        string group_id FK "授權群組 (user_id + group_id 唯一)"
+        timestamp created_at
+    }
+
     MATCH_SESSIONS {
         uuid id PK
-        string group_id FK "綁定群組 (可為 NULL 代表公開場)"
+        string group_id FK "新建場次必選授權群組 (舊資料可能為 NULL)"
         string host_user_id FK "團主 User ID"
         string title "場次名稱"
         string match_type "single (單打) / double (雙打)"
@@ -188,17 +200,19 @@ erDiagram
 ---
 
 ### 6.2 零打團主端 (Host - `/liff/admin`)
-1. **建立新場次**：
+1. **選定群組並申請**：申請人須在目標 LINE 群組內；從群內連結進入或從圖文選單進入並自行選擇群組。申請紀錄保存 `user_id` 與 `group_id`，核准後只授權該群；另一群須另行申請或由最高管理員直接授權。
+2. **建立新場次**：
+   - 先在「發布推播目標群組」選單選擇**已授權且啟用的歸屬群組**；後端以驗證過的 LINE 身分、`host_group_permissions` 及群組狀態再次校驗。不能留空或跨群建團。
    - 填寫型式（單/雙打）、日期起訖時間、地點面數、正備取上限、用球、費用、程度與備註。
-   - 儲存後自動生成精美 **LINE Flex Message 卡片** 推播至綁定的群組。
-2. **場次進度總覽**：
+   - 建立場次不等於發送群組訊息。「由 Bot 自動推播至群組」預設關閉；團主可建立後自行分享卡片／連結至場次原群組，若開啟 Bot 推播才會消耗額度。
+3. **場次進度總覽**：
    - 狀態顏色指示：🟢 **深綠色** 代表正取已全滿；🟡 **淺綠色** 代表熱烈招募中。
-3. **球友名單與現場收款對帳**：
+4. **球友名單與現場收款對帳**：
    - 查看排定的正取（1, 2, 3...）與備取（備1, 備2...）名單。
    - **一鍵切換收款狀態**：點擊切換 🟠 **待付款 (橘色)** / 🟢 **已付款 (綠色)**。
    - **手動代報名**：支援直接輸入朋友名字完成手動 +1。
    - **強制移除球友**：團主可手動移除某位報名者，名額自動由備取遞補。
-4. **場次緊急通知推播 (Broadcast)**：
+5. **場次緊急通知推播 (Broadcast)**：
    - 若遇場地臨時更換、停打等突發狀況，團主在後台輸入訊息點擊「推播」，小幫手立即**以 LINE 私訊一對一推播給該場次的所有正取與備取球友**。
 
 ---
@@ -208,9 +222,9 @@ erDiagram
    - 查看目前已加入的所有群組名稱、Group ID 與開團歷史統計。
    - **暫停該群服務 (Deactivate)**：一鍵切換群組啟用狀態。停用後該群成員與團主皆無法使用小幫手。
    - **強制機器人退群 (Leave Group)**：調用 LINE 官方退群 API，讓小幫手主動退出該群組，徹底解除關係。
-2. **團主名單審核與授權 (Hosts)**：
-   - 瀏覽系統所有使用者與當前身分。
-   - 一鍵將特定球友升格為「零打團主 (`host`)」，或將不適任團主「撤銷團主」降為一般球友。
+2. **團主申請審核與群組授權 (Hosts)**：
+   - 審核頁顯示申請人、目標群組及狀態；核准時建立對應群組授權。
+   - 「團主群組授權」頁顯示使用者與對應群組，可直接新增、修改（換人／換群）、刪除授權關係；刪除授權不會刪除使用者、群組或歷史場次。
 
 ---
 
@@ -243,17 +257,21 @@ erDiagram
 | `POST` | `/api/webhook` | 接收 LINE 官方 Webhook 事件 (加入群組、文字指令) | LINE 簽名驗證 |
 | `GET` | `/api/auth/me` | 驗證 LINE ID Token，回傳個人檔案、角色與是否為 Super Admin | 登入球友 |
 | `GET` | `/api/sessions` | 查詢開放場次（支援 `date`, `status`, `groupId` 篩選，內建過期自動清理節流） | 群組成員 / 公開 |
-| `POST` | `/api/sessions` | 建立新零打場次，並可選擇發送 Flex Message 卡片至群組 | 團主 (`host`) |
+| `GET` | `/api/groups` | 查詢登入者可開團的啟用群組；申請用清單另以 `forApplication=true` 查詢 | LINE 登入 |
+| `GET / POST / PATCH` | `/api/host-applications` | 查詢、依群組申請及審核團主資格 | 本人查詢／群組成員申請／最高管理員審核 |
+| `POST` | `/api/sessions` | 必選本人獲授權的啟用群組建立場次；Bot 推播為獨立可選動作 | 該群已授權團主／最高管理員 |
 | `PATCH` | `/api/sessions` | 編輯場次內容或變更狀態（如停用 `status: 'cancelled'`、重新啟用 `status: 'open'`） | 團主 / 超級管理員 |
 | `DELETE` | `/api/sessions` | 刪除場次（原子級聯刪除該場次所有球友報名與候補名單） | 團主 / 超級管理員 |
 | `GET` | `/api/registrations` | 查詢個人報名紀錄（自動偵測時間衝突）或場次名單 | 登入球友 / 團主 |
 | `POST` | `/api/registrations` | 球友報名 / 備取排隊 / 團主代報名 (+1) | 群組成員 / 團主 |
 | `PATCH` | `/api/registrations` | 取消報名（觸發自動遞補）或修改付款狀態（橘/綠切換） | 當事人 / 團主 |
-| `POST` | `/api/notify` | 向指定場次的所有報名球友發送緊急私訊推播 | 團主 (`host`) |
+| `POST` | `/api/notify` | 向原場次群組推播卡片，或向該場報名球友緊急私訊 | 該群已授權之原始主揪／最高管理員 |
 | `GET` | `/api/admin/groups` | 取得系統所有合作群組清單與場次統計 | 超級管理員 (`admin`) |
 | `PATCH` | `/api/admin/groups` | 切換群組啟用/停用，或執行主動退群 (`leaveGroup`) | 超級管理員 (`admin`) |
 | `GET` | `/api/admin/users` | 取得全系統球友清單與角色狀態 | 超級管理員 (`admin`) |
-| `PATCH` | `/api/admin/users` | 開通或撤銷球友之團主 (`host`) 身分 | 超級管理員 (`admin`) |
+| `GET / POST / PATCH / DELETE` | `/api/admin/host-groups` | 查詢、新增、修改、刪除團主與群組的授權關係 | 超級管理員 (`admin`) |
+
+> `users.role = 'host'` 是使用者角色標示，並非開團憑證；授權是否有效以群組關係為準。
 
 ---
 
@@ -261,7 +279,7 @@ erDiagram
 
 ### 步驟 1: Supabase 資料庫建置
 1. 前往 [Supabase](https://supabase.com) 建立免費專案。
-2. 進入 **SQL Editor**，複製專案中的 [`supabase/schema.sql`](supabase/schema.sql) 貼上並執行。
+2. 新專案執行 [`supabase/schema.sql`](supabase/schema.sql)；既有專案先備份，執行 [`supabase/migrations/20260924_host_group_permissions.sql`](supabase/migrations/20260924_host_group_permissions.sql)，再部署新版程式。舊 `host` 角色不會自動轉成群組授權。
 3. 至 **Project Settings** -> **API** 複製 `Project URL` (`SUPABASE_URL`)、`anon key` (`SUPABASE_ANON_KEY`) 與 `service_role key` (`SUPABASE_SERVICE_ROLE_KEY`)。
 
 ### 步驟 2: LINE 開發者後台設定
