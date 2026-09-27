@@ -103,6 +103,7 @@ export interface Registration {
   session_id: string;
   user_id: string;
   player_name: string;
+  attendee_name?: string | null;
   party_size: number;
   status: RegistrationStatus;
   waitlist_order?: number | null;

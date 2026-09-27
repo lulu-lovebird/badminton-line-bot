@@ -162,6 +162,9 @@ function AdminDashboardContent() {
   // 代報名表單狀態
   const [proxyName, setProxyName] = useState('');
   const [proxySize, setProxySize] = useState(1);
+  const [editingAttendeeId, setEditingAttendeeId] = useState<string | null>(null);
+  const [attendeeDraft, setAttendeeDraft] = useState('');
+  const [savingAttendee, setSavingAttendee] = useState(false);
 
   // 新開場次表單狀態
   const [form, setForm] = useState({
@@ -563,6 +566,7 @@ function AdminDashboardContent() {
       return;
     }
     setSelectedSession(session);
+    setEditingAttendeeId(null);
     if (!keepTab) {
       setDetailTab('roster');
     }
@@ -622,6 +626,39 @@ function AdminDashboardContent() {
       }
     } catch (e) {
       console.error(e);
+    }
+  }
+
+  async function saveAttendeeName(registrationId: string) {
+    if (attendeeDraft.trim().length > 200 || savingAttendee) return;
+    setSavingAttendee(true);
+    try {
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      if (idToken) headers['Authorization'] = `Bearer ${idToken}`;
+      else if (userProfile?.line_user_id) headers['x-test-user-id'] = userProfile.line_user_id;
+
+      const res = await fetch('/api/registrations', {
+        method: 'PATCH',
+        headers,
+        body: JSON.stringify({
+          registration_id: registrationId,
+          action: 'update_attendee',
+          attendee_name: attendeeDraft.trim(),
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        alert(data.error || '儲存出席者註記失敗');
+        return;
+      }
+      setRegistrations((prev) => prev.map((r) => r.id === registrationId
+        ? { ...r, attendee_name: data.attendee_name } : r));
+      setEditingAttendeeId(null);
+    } catch (e) {
+      console.error(e);
+      alert('儲存出席者註記失敗，請重試');
+    } finally {
+      setSavingAttendee(false);
     }
   }
 
@@ -2223,6 +2260,17 @@ function AdminDashboardContent() {
                             <span className="text-xs font-bold text-slate-700">
                               {r.status === 'main' ? `${idx + 1}.` : `[備${r.waitlist_order}]`} {r.player_name}
                             </span>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setEditingAttendeeId(r.id);
+                                setAttendeeDraft(r.attendee_name || '');
+                              }}
+                              className="text-[11px] text-blue-600 hover:text-blue-800 underline"
+                              aria-label={`編輯${r.player_name}的出席者註記`}
+                            >
+                              編輯出席者
+                            </button>
                             {r.is_regular && (
                               <span className="text-[10px] px-1.5 py-0.2 rounded bg-emerald-100 text-emerald-800 font-bold border border-emerald-200">
                                 固定咖
@@ -2239,6 +2287,36 @@ function AdminDashboardContent() {
                               </span>
                             )}
                           </div>
+                          {r.attendee_name && (
+                            <div className="text-[11px] text-blue-700 mt-1 break-words">
+                              出席者註記：{r.attendee_name}
+                            </div>
+                          )}
+                          {editingAttendeeId === r.id && (
+                            <form
+                              className="flex flex-wrap gap-1.5 mt-2"
+                              onSubmit={(e) => {
+                                e.preventDefault();
+                                saveAttendeeName(r.id);
+                              }}
+                            >
+                              <input
+                                type="text"
+                                aria-label="出席者註記"
+                                placeholder="實際到場者姓名（可填多人，留空可清除）"
+                                maxLength={200}
+                                value={attendeeDraft}
+                                onChange={(e) => setAttendeeDraft(e.target.value)}
+                                className="min-w-0 w-full sm:w-auto flex-1 text-xs border rounded-lg px-2 py-1.5 focus:border-blue-500 outline-none"
+                              />
+                              <button type="submit" disabled={savingAttendee} className="text-xs px-2 py-1.5 rounded-lg bg-blue-600 text-white disabled:opacity-50">
+                                {savingAttendee ? '儲存中' : '儲存'}
+                              </button>
+                              <button type="button" onClick={() => setEditingAttendeeId(null)} className="text-xs text-slate-500 px-1">
+                                取消
+                              </button>
+                            </form>
+                          )}
                           <div className="text-[11px] text-slate-400 mt-0.5 flex items-center gap-1.5">
                             <span>
                               應付: ${(r.applicable_fee ?? selectedSession.fee) * (r.party_size || 1)}

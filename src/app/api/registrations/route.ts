@@ -94,6 +94,7 @@ export async function GET(req: NextRequest) {
             id: r.id,
             session_id: r.session_id,
             player_name: r.player_name,
+            attendee_name: r.attendee_name,
             party_size: r.party_size,
             status: r.status,
             waitlist_order: r.waitlist_order,
@@ -416,6 +417,25 @@ export async function PATCH(req: NextRequest) {
       // 🔄 立即失效場次快取，確保遞補與釋出名額即時呈現
       invalidateSessionCache();
       return NextResponse.json({ message: '已取消報名並完成遞補程序' });
+    }
+
+    if (action === 'update_attendee') {
+      if (!isHostOrAdmin) {
+        return NextResponse.json({ error: '僅本場主揪或超級管理員可編輯出席者註記' }, { status: 403 });
+      }
+      if (typeof body.attendee_name !== 'string' || body.attendee_name.trim().length > 200) {
+        return NextResponse.json({ error: '出席者註記須為 200 字以內的文字（清除時請傳空字串）' }, { status: 400 });
+      }
+
+      const { data, error } = await supabaseAdmin
+        .from('registrations')
+        .update({ attendee_name: body.attendee_name.trim() || null })
+        .eq('id', registration_id)
+        .select()
+        .single();
+
+      if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+      return NextResponse.json(data);
     }
 
     if (action === 'update_payment') {

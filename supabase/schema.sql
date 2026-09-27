@@ -72,7 +72,8 @@ CREATE TABLE IF NOT EXISTS registrations (
     attendance_status TEXT DEFAULT 'pending',     -- 'pending' | 'attended' (已到) | 'absent' (缺席)
     registered_at TIMESTAMPTZ DEFAULT NOW(),
     cancelled_at TIMESTAMPTZ,
-    notes TEXT
+    notes TEXT,
+    attendee_name TEXT                        -- 團主註記的到場人員稱呼，不取代報名人姓名（僅團主與報名者可見）
 );
 
 -- 索引優化常用查詢
