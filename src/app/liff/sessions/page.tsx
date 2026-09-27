@@ -35,6 +35,9 @@ function SessionListContent() {
 
   const { userProfile, idToken } = useLiff();
 
+  // 我所屬的球隊清單（私訊進入且嚴格隔離時，供球友選擇自己所屬群組）
+  const [myGroups, setMyGroups] = useState<{ group_id: string; group_name: string }[]>([]);
+
   // 是否開放跨社團查看場次 (支援 ALLOW_CROSS_GROUP_SESSIONS 與 NEXT_PUBLIC_ALLOW_CROSS_GROUP_SESSIONS，預設 false 嚴格隔離)
   const isCrossGroupAllowed = (process.env.NEXT_PUBLIC_ALLOW_CROSS_GROUP_SESSIONS || 'false').toLowerCase().trim() === 'true';
 
@@ -88,6 +91,26 @@ function SessionListContent() {
     hasFetchedRef.current = true;
     fetchSessions();
   }, []);
+
+  // 從私訊 / 圖文選單進入且無 groupId 時，載入球友本人實際所屬的啟用群組
+  useEffect(() => {
+    if (currentGroupId || isCrossGroupAllowed) return;
+    let cancelled = false;
+    (async () => {
+      const headers: Record<string, string> = {};
+      if (idToken) headers['Authorization'] = `Bearer ${idToken}`;
+      else if (userProfile?.userId) headers['x-test-user-id'] = userProfile.userId;
+      try {
+        const res = await fetch('/api/groups?mine=true', { headers, cache: 'no-store' });
+        if (!res.ok) return;
+        const data = await res.json();
+        if (!cancelled && Array.isArray(data)) setMyGroups(data);
+      } catch {}
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [currentGroupId, isCrossGroupAllowed, idToken, userProfile?.userId]);
 
   const fetchRoster = async (sessionId: string) => {
     setRosterData((prev) => ({
@@ -262,6 +285,51 @@ function SessionListContent() {
         </div>
       </div>
 
+      {/* 私訊進入時的「我的球隊」選擇器：僅列出球友本人實際所屬的啟用群組 */}
+      {!currentGroupId && myGroups.length > 0 && (
+        <div className="bg-white border border-slate-200 rounded-xl p-3 mb-4 shadow-sm">
+          <label className="text-xs font-bold text-slate-700 flex items-center gap-1.5 mb-1.5">
+            <Users size={14} className="text-emerald-600" />
+            我的球隊（選擇後顯示該社團場次）
+          </label>
+          <select
+            value=""
+            onChange={(e) => {
+              if (!e.target.value) return;
+              setCurrentGroupId(e.target.value);
+              fetchSessions(selectedDate, e.target.value, true);
+            }}
+            className="w-full text-xs border rounded-lg p-2 bg-white text-slate-700 outline-none focus:border-emerald-500"
+          >
+            <option value="">請選擇我的球隊...</option>
+            {myGroups.map((g) => (
+              <option key={g.group_id} value={g.group_id}>
+                🏸 {g.group_name || '羽球社團群組'}
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
+
+      {/* 已選群組時的切換提示 */}
+      {currentGroupId && (
+        <div className="bg-white border border-slate-200 rounded-xl p-2.5 mb-4 shadow-sm flex items-center justify-between text-xs">
+          <span className="text-slate-700 font-medium flex items-center gap-1.5">
+            <Users size={14} className="text-emerald-600" />
+            {myGroups.find((g) => g.group_id === currentGroupId)?.group_name || '本群球隊'}
+          </span>
+          <button
+            onClick={() => {
+              setCurrentGroupId('');
+              fetchSessions(selectedDate, '', true);
+            }}
+            className="text-slate-400 hover:text-slate-700 underline"
+          >
+            切換球隊
+          </button>
+        </div>
+      )}
+
       {/* 私訊 / 無群組 ID 進入時的提醒橫幅 (僅在嚴格隔離封閉模式下顯示) */}
       {!currentGroupId && !isCrossGroupAllowed && (
         <div className="bg-amber-50 border border-amber-200 text-amber-900 rounded-xl p-3 mb-4 text-xs flex items-start gap-2 shadow-sm">
@@ -269,7 +337,7 @@ function SessionListContent() {
           <div className="space-y-0.5">
             <span className="font-bold">溫馨提醒：各羽球社團專屬場次限於群組內報名</span>
             <p className="text-amber-800/90 text-[11px] leading-relaxed">
-              若您要報名特定球團/LINE 群組開立的零打場次，請直接前往該羽球 LINE 群組點擊公告或輸入「我要報名」進入！
+              若您要報名特定球團/LINE 群組開立的零打場次，可從上方「我的球隊」選擇您所在的社團，或直接前往該羽球 LINE 群組點擊公告或輸入「我要報名」進入！
             </p>
           </div>
         </div>

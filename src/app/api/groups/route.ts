@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 import { getAuthenticatedUserId, isGlobalAdmin } from '@/lib/host-permissions';
+import { isUserInGroup } from '@/lib/line-group-auth';
 
 export const dynamic = 'force-dynamic';
 
@@ -9,6 +10,25 @@ export async function GET(req: NextRequest) {
   try {
     const caller = await getAuthenticatedUserId(req);
     if (!caller) return NextResponse.json({ error: '請先登入' }, { status: 401 });
+
+    // 我所屬的球隊：以 LINE 官方 API 逐一驗證目前使用者實際所在的啟用群組，
+    // 只回 group_id 與 group_name，不洩漏該群任何場次資料。
+    if (req.nextUrl.searchParams.get('mine') === 'true') {
+      const { data: activeGroups, error } = await supabaseAdmin.from('groups')
+        .select('group_id, group_name').eq('is_active', true)
+        .order('created_at', { ascending: true });
+      if (error) throw new Error(error.message);
+      const myGroups = [];
+      for (const g of activeGroups || []) {
+        if (await isUserInGroup(g.group_id, caller)) {
+          myGroups.push({ group_id: g.group_id, group_name: g.group_name });
+        }
+      }
+      return NextResponse.json(myGroups, {
+        headers: { 'Cache-Control': 'private, no-cache, no-store, must-revalidate' },
+      });
+    }
+
     if (req.nextUrl.searchParams.get('forApplication') === 'true') {
       const { data, error } = await supabaseAdmin.from('groups')
         .select('group_id, group_name, is_active').eq('is_active', true)
