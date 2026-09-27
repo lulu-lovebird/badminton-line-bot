@@ -521,7 +521,14 @@ export async function POST(req: NextRequest) {
     // 🔄 立即失效場次快取，確保新建立的場次秒級呈現在前端
     invalidateSessionCache();
 
-    return NextResponse.json(session, { status: 201 });
+    // session.status 可能已於上方預載固定咖流程更新為 full，重新組合確保回傳最新狀態
+    const responseSession = {
+      ...session,
+      host_name: finalDisplayName,
+      host_picture_url: finalPictureUrl,
+    };
+
+    return NextResponse.json(responseSession, { status: 201 });
   } catch (err: unknown) {
     const errorMsg = err instanceof Error ? err.message : '內部錯誤';
     return NextResponse.json({ error: errorMsg }, { status: 500 });
