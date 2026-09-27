@@ -63,7 +63,7 @@ export default function HostGuidePage() {
             </h1>
             <p className="text-sm sm:text-base text-emerald-100 max-w-xl leading-relaxed">
               告別在 LINE 群組手動複製文字、+1 洗版、錯亂漏算人數與現場對帳困擾！JuJu
-              提供全自動化的開團推播、正取備取排隊、自動遞補通知與現場收款標記工具。
+              提供團主自行分享 Flex 開團卡片、正取備取排隊、自動遞補通知與現場收款標記工具。
             </p>
           </div>
           <div className="mt-6 sm:mt-0 flex flex-col items-center sm:items-end gap-2.5 shrink-0">
@@ -130,7 +130,7 @@ export default function HostGuidePage() {
               href="#step7"
               className="p-3 rounded-2xl bg-slate-50 hover:bg-emerald-50 text-slate-700 hover:text-emerald-800 border border-slate-200/80 transition-colors font-semibold flex items-center justify-between"
             >
-              <span>7. 補發卡片/緊急通知</span>
+              <span>7. 分享卡片/緊急通知</span>
               <ChevronRight size={14} className="text-slate-400 shrink-0" />
             </a>
             <a
@@ -181,7 +181,7 @@ export default function HostGuidePage() {
               <div>
                 <strong className="text-slate-900 font-bold">邀請 JuJu 加入您的羽球 LINE 群組：</strong>
                 <p className="mt-1 text-xs sm:text-sm text-slate-600 leading-relaxed">
-                  將 JuJu 機器人邀請進入您固定揪團打球的 LINE 群組中。只要機器人在群組內，即可支援自動推播圖文開團卡片，球友在群組輸入「零打」也會自動叫出即時開放場次。
+                  將 JuJu 機器人邀請進入您固定揪團打球的 LINE 群組中。開團後請由團主透過 LIFF 分享 Flex 卡片至該群；小幫手不會自動向群組推播開團訊息。球友仍可在群組輸入「零打」查詢開放場次。
                 </p>
               </div>
             </div>
@@ -262,7 +262,7 @@ export default function HostGuidePage() {
               <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 space-y-1.5">
                 <span className="font-bold text-slate-900 text-sm">🏸 場次歸屬群組（必選）</span>
                 <p className="text-slate-600 leading-relaxed">
-                  在「發布推播目標群組」下拉選單明確選擇這場球所屬的群組；選項只包含您已獲授權且啟用的群組。場次與報名名單會歸屬於該群，不能留空或借用另一群的授權。是否由 Bot 推播另由獨立開關決定（預設關閉）。
+                  在「場次所屬群組（必選）」下拉選單明確選擇這場球所屬的群組；選項只包含您已獲授權且啟用的群組。場次與報名名單會歸屬於該群，不能留空或借用另一群的授權。建立場次不會觸發 Bot 群組推播。
                 </p>
               </div>
 
@@ -289,7 +289,7 @@ export default function HostGuidePage() {
 
               <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 space-y-1.5">
                 <span className="font-bold text-slate-900 text-sm">💰 臨打費用 ($)</span>
-                <p className="text-slate-600 leading-relaxed">每人費用金額。系統會根據每位球友報名人數（如 +2）自動計算應付總額。</p>
+                <p className="text-slate-600 leading-relaxed">每人費用金額。季打優惠預設不啟用；若有季打優惠，請勾選「啟用季打優惠」並填寫大於 0 的整數金額，不提供優惠就維持關閉。</p>
               </div>
 
               <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 space-y-1.5">
@@ -305,7 +305,7 @@ export default function HostGuidePage() {
               <div>
                 <strong className="font-bold text-emerald-900">點擊「立即建立新零打場次」：</strong>
                 <p className="mt-1 leading-relaxed">
-                  場次會建立在選定群組下，但<strong>不會因選了群組就自動推播</strong>。建議建立後使用分享卡片或複製報名連結，由團主自行貼到該群（不扣 Bot 主動推播額度）；只有主動開啟「由 Bot 自動推播至群組」才會由 Bot 發送並消耗額度。
+                  場次會建立在選定群組下，<strong>Bot 不會向群組自動推播</strong>。建立後由團主點擊 LIFF 分享 Flex 卡片，親自選擇場次所屬群組發送；不扣 Bot 主動推播額度。
                 </p>
               </div>
             </div>
@@ -443,7 +443,7 @@ export default function HostGuidePage() {
               7
             </div>
             <div>
-              <h2 className="text-lg sm:text-2xl font-black text-slate-900">第七步：群組補發卡片與球友緊急通知</h2>
+              <h2 className="text-lg sm:text-2xl font-black text-slate-900">第七步：團主分享卡片與球友緊急通知</h2>
               <p className="text-xs sm:text-sm text-slate-500 mt-0.5">隨時置頂卡片與突發狀況即時廣播</p>
             </div>
           </div>
@@ -453,10 +453,10 @@ export default function HostGuidePage() {
               <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 space-y-2">
                 <strong className="text-slate-900 text-sm flex items-center gap-1.5">
                   <Send size={15} className="text-emerald-600" />
-                  群組卡片補發 / 重發
+                  團主自行分享群組卡片
                 </strong>
                 <p className="text-slate-600 leading-relaxed">
-                  場次建立時必須先指定歸屬群組。若建立後想再提醒球友，請優先使用分享卡片或複製連結，自行貼至<strong>該場次所屬群組</strong>；如使用 Bot 補發卡片，僅能推播至原場次群組，並會消耗 LINE 主動推播額度。
+                  場次建立時必須先指定歸屬群組。建立後可透過 LIFF Share Target Picker 分享 Flex 卡片；想再次提醒球友，可重新使用團主分享卡片或複製連結，自行貼至<strong>該場次所屬群組</strong>。Bot 的開團群組推播與補發功能目前停用。
                 </p>
               </div>
 
@@ -564,7 +564,7 @@ export default function HostGuidePage() {
             <div className="p-4 sm:p-5 bg-slate-50 rounded-2xl border border-slate-200 space-y-1.5">
               <div className="font-bold text-slate-900 text-sm sm:text-base">Q2：為什麼我開團後，群組沒有收到卡片？</div>
               <p className="text-slate-600 text-xs sm:text-sm leading-relaxed">
-                選擇群組只決定場次歸屬，不代表 Bot 會推播。建立時「由 Bot 自動推播至群組」預設關閉；可在建團成功後自行將分享卡片或報名連結貼到<strong>該場次群組</strong>，不消耗 Bot 推播額度。
+                選擇群組只決定場次歸屬，Bot 不會自動推播開團卡片。請在建團成功後使用 LIFF 分享 Flex 卡片，由團主本人選擇<strong>該場次群組</strong>發送；不消耗 Bot 推播額度。
               </p>
             </div>
 

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
-import { lineClient, createSessionFlexMessage } from '@/lib/line';
+import { lineClient } from '@/lib/line';
 import { verifyLineIdToken, isSuperAdmin } from '@/lib/auth';
 import { getAuthenticatedUserId, hasHostGroupPermission } from '@/lib/host-permissions';
 import { isUserInGroup } from '@/lib/line-group-auth';
@@ -343,8 +343,8 @@ export async function POST(req: NextRequest) {
     if (!(await hasHostGroupPermission(caller, group_id))) {
       return NextResponse.json({ error: '您沒有此群組的開團權限' }, { status: 403 });
     }
-    if (notify_group_id && notify_group_id !== group_id) {
-      return NextResponse.json({ error: '推播群組與場次群組不符' }, { status: 400 });
+    if (notify_group_id !== undefined && notify_group_id !== null) {
+      return NextResponse.json({ error: 'Bot 群組推播已停用，請建立場次後由團主分享卡片' }, { status: 400 });
     }
     const { data: targetGroup, error: groupError } = await supabaseAdmin.from('groups')
       .select('is_active').eq('group_id', group_id).maybeSingle();
@@ -395,9 +395,11 @@ export async function POST(req: NextRequest) {
 
     // 2. 建立場次 (確保日期時間以台灣時區標準化存入 TIMESTAMPTZ)
     const baseFee = Number(fee) || 200;
-    const parsedSeasonalFee = seasonal_fee !== undefined && seasonal_fee !== null && !isNaN(Number(seasonal_fee))
-      ? Number(seasonal_fee)
-      : null;
+    const hasSeasonalFee = seasonal_fee !== undefined && seasonal_fee !== null && seasonal_fee !== '';
+    const parsedSeasonalFee = hasSeasonalFee ? Number(seasonal_fee) : null;
+    if (parsedSeasonalFee !== null && (!Number.isInteger(parsedSeasonalFee) || parsedSeasonalFee <= 0)) {
+      return NextResponse.json({ error: '季打優惠金額必須是大於 0 的整數；不提供優惠請留空' }, { status: 400 });
+    }
 
     const insertPayload: Record<string, unknown> = {
       host_user_id,
@@ -467,8 +469,8 @@ export async function POST(req: NextRequest) {
       const prefillRegistrations = validPrefillIds.map((uid) => {
         const mem = membershipMap.get(uid);
         let applicableFee = baseFee;
-        if (mem?.has_seasonal_discount) {
-          applicableFee = mem.seasonal_fee || parsedSeasonalFee || baseFee;
+        if (parsedSeasonalFee !== null && mem?.has_seasonal_discount) {
+          applicableFee = mem.seasonal_fee || parsedSeasonalFee;
         }
 
         return {
@@ -515,27 +517,7 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // 4. 若有設定推播群組，自動發送 Flex Message
-    const targetGroupId = notify_group_id || group_id;
-    if (targetGroupId) {
-      const sessionWithHost = {
-        ...session,
-        host_name: finalDisplayName,
-        host_picture_url: finalPictureUrl,
-      };
-
-      const liffUrl = process.env.LINE_LIFF_URL || process.env.NEXT_PUBLIC_LIFF_URL || '';
-      const flexMsg = createSessionFlexMessage(sessionWithHost, liffUrl);
-      try {
-        await lineClient.pushMessage({
-          to: targetGroupId,
-          messages: [flexMsg],
-        });
-      } catch (pushErr) {
-        console.error('推播至群組失敗:', pushErr);
-      }
-    }
-
+    // 群組開團卡片由團主透過 LIFF Share Target Picker 分享，不消耗 Bot 主動推播額度。
     // 🔄 立即失效場次快取，確保新建立的場次秒級呈現在前端
     invalidateSessionCache();
 

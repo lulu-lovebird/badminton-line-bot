@@ -177,7 +177,7 @@ function AdminDashboardContent() {
     level_requirement: '初中級 (4~7級)',
     shuttlecock: '勝利比賽球 (綠標)',
     fee: 200,
-    seasonal_fee: 180,
+    seasonal_fee: null as number | null,
     notes: '含空調，請自備球拍與乾淨球鞋',
     is_roster_public: true,
   });
@@ -211,7 +211,7 @@ function AdminDashboardContent() {
   // 方案 C: 邀請連結複製狀態
   const [copiedInvite, setCopiedInvite] = useState(false);
 
-  const [autoPushToGroup, setAutoPushToGroup] = useState(false);
+  const [isSeasonalDiscountEnabled, setIsSeasonalDiscountEnabled] = useState(false);
   const [liffInstance, setLiffInstance] = useState<any>(null);
   const [shareModalSession, setShareModalSession] = useState<MatchSession | null>(null);
   const [copyToast, setCopyToast] = useState<string | null>(null);
@@ -224,6 +224,7 @@ function AdminDashboardContent() {
     const newStart = toDatetimeLocalString(s.start_time, 7);
     const newEnd = toDatetimeLocalString(s.end_time, 7);
 
+    setIsSeasonalDiscountEnabled(s.seasonal_fee !== null && s.seasonal_fee !== undefined);
     setForm({
       group_id: s.group_id || urlGroupId || '',
       title: s.title,
@@ -237,7 +238,7 @@ function AdminDashboardContent() {
       level_requirement: s.level_requirement || '初中級 (4~7級)',
       shuttlecock: s.shuttlecock || '勝利比賽球 (綠標)',
       fee: s.fee || 200,
-      seasonal_fee: s.seasonal_fee ?? 180,
+      seasonal_fee: s.seasonal_fee ?? null,
       notes: s.notes || '含空調，請自備球拍與乾淨球鞋',
       is_roster_public: s.is_roster_public ?? true,
     });
@@ -894,6 +895,10 @@ function AdminDashboardContent() {
 
   async function handleCreateSession(e: React.FormEvent) {
     e.preventDefault();
+    if (isSeasonalDiscountEnabled && (!form.seasonal_fee || form.seasonal_fee <= 0)) {
+      alert('請輸入大於 0 的季打優惠金額，或關閉季打優惠。');
+      return;
+    }
     try {
       const headers: Record<string, string> = { 'Content-Type': 'application/json' };
       if (idToken) headers['Authorization'] = `Bearer ${idToken}`;
@@ -906,7 +911,7 @@ function AdminDashboardContent() {
           ...form,
           host_user_id: userProfile?.line_user_id || 'host_admin_001',
           host_name: userProfile?.display_name,
-          notify_group_id: autoPushToGroup && form.group_id ? form.group_id : undefined,
+          seasonal_fee: isSeasonalDiscountEnabled ? form.seasonal_fee : null,
           prefilled_user_ids: prefillRegularIds,
         }),
       });
@@ -1197,7 +1202,7 @@ function AdminDashboardContent() {
 
           <div>
             <label className="text-xs font-semibold text-slate-600 flex items-center justify-between">
-              <span>發布推播目標群組</span>
+              <span>場次所屬群組（必選）</span>
               {form.group_id ? (
                 <span className="text-[11px] text-emerald-600 font-medium">✓ 已選擇開團群組（推播另依開關）</span>
               ) : (
@@ -1259,14 +1264,29 @@ function AdminDashboardContent() {
               />
             </div>
             <div>
-              <label className="text-xs font-semibold text-slate-600">季打優惠 ($)</label>
-              <input
-                type="number"
-                placeholder="選填"
-                value={form.seasonal_fee}
-                onChange={(e) => setForm({ ...form, seasonal_fee: Number(e.target.value) })}
-                className="w-full text-xs border rounded-lg p-2.5 mt-1 outline-none text-emerald-700 font-bold"
-              />
+              <label className="text-xs font-semibold text-slate-600 flex items-center gap-1">
+                <input
+                  type="checkbox"
+                  checked={isSeasonalDiscountEnabled}
+                  onChange={(e) => {
+                    setIsSeasonalDiscountEnabled(e.target.checked);
+                    if (!e.target.checked) setForm((prev) => ({ ...prev, seasonal_fee: null }));
+                  }}
+                />
+                啟用季打優惠
+              </label>
+              {isSeasonalDiscountEnabled && (
+                <input
+                  type="number"
+                  min={1}
+                  step={1}
+                  required
+                  placeholder="輸入優惠金額"
+                  value={form.seasonal_fee ?? ''}
+                  onChange={(e) => setForm({ ...form, seasonal_fee: e.target.value === '' ? null : Number(e.target.value) })}
+                  className="w-full text-xs border rounded-lg p-2.5 mt-1 outline-none text-emerald-700 font-bold"
+                />
+              )}
             </div>
           </div>
 
@@ -1495,7 +1515,7 @@ function AdminDashboardContent() {
                                   {m.user?.display_name || '固定球友'}
                                 </span>
                               </div>
-                              {m.has_seasonal_discount ? (
+                              {isSeasonalDiscountEnabled && form.seasonal_fee && m.has_seasonal_discount ? (
                                 <span className="text-[10px] px-1.5 py-0.2 rounded bg-amber-100 text-amber-800 font-semibold shrink-0">
                                   季打 ${m.seasonal_fee || form.seasonal_fee || form.fee}
                                 </span>
@@ -1604,21 +1624,9 @@ function AdminDashboardContent() {
             </div>
           </div>
 
-          {/* 群組推播設定 */}
-          <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl space-y-1.5">
-            <label className="flex items-center gap-2 text-xs font-semibold text-slate-700 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={autoPushToGroup}
-                onChange={(e) => setAutoPushToGroup(e.target.checked)}
-                className="rounded text-emerald-600 focus:ring-emerald-500"
-              />
-              <span>由 Bot 自動推播至群組（選用）</span>
-            </label>
-            <p className="text-[11px] text-slate-400 pl-5 leading-tight">
-              ⚠️ 注意：Bot 主動推播會消耗每月 200 則免費額度 (群組人數 × 1 則)。建議建立後使用「分享卡片」或「複製連結」自貼群組，完全免扣額度！
-            </p>
-          </div>
+          <p className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl text-[11px] text-emerald-900">
+            建立場次後，請用 LIFF 分享卡片由團主本人發送到所屬群組；小幫手不會自動向群組推播開團訊息。
+          </p>
 
           <button
             type="submit"
