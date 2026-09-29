@@ -73,20 +73,9 @@ export async function GET(req: NextRequest) {
 
       const sessionIds = (groupSessions || []).map((s) => s.id);
 
-      // 若該群組尚未開過場次，降級回傳所有已登記過的使用者或空陣列
+      // 沒有本群歷史場次時，不可回退查詢全站使用者資料。
       if (sessionIds.length === 0) {
-        const { data: allUsers } = await supabaseAdmin
-          .from('users')
-          .select('line_user_id, display_name, picture_url')
-          .limit(20);
-
-        const list = (allUsers || []).map((u) => ({
-          user_id: u.line_user_id,
-          display_name: u.display_name,
-          picture_url: u.picture_url,
-          count: 0,
-        }));
-        return NextResponse.json(list);
+        return NextResponse.json([]);
       }
 
       // 2. 查詢這些場次中所有有效報名紀錄 (排除代報名 proxy_)

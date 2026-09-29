@@ -33,7 +33,7 @@ function SessionListContent() {
   // 取得台灣時區當天日期字串 YYYY-MM-DD，防呆阻止選擇已過去的日期
   const todayTaipeiStr = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Taipei' }).format(new Date());
 
-  const { userProfile, idToken } = useLiff();
+  const { userProfile, idToken, isReady, isLoggedIn } = useLiff();
 
   // 我所屬的球隊清單（私訊進入且嚴格隔離時，供球友選擇自己所屬群組）
   const [myGroups, setMyGroups] = useState<{ group_id: string; group_name: string }[]>([]);
@@ -51,7 +51,9 @@ function SessionListContent() {
   });
 
   // 取得場次 (支援智慧快取與強制刷新)
+  const fetchSeqRef = useRef(0);
   async function fetchSessions(dateFilter = selectedDate, groupFilter = currentGroupId, isManualRefresh = false) {
+    const requestId = ++fetchSeqRef.current;
     setLoading(true);
     try {
       const params = new URLSearchParams();
@@ -64,37 +66,55 @@ function SessionListContent() {
         params.append('_t', Date.now().toString());
       }
 
+      const headers: Record<string, string> = {};
+      if (idToken) headers['Authorization'] = `Bearer ${idToken}`;
+      else if (process.env.NODE_ENV !== 'production' && userProfile?.userId) headers['x-test-user-id'] = userProfile.userId;
+      if (isManualRefresh) headers['Cache-Control'] = 'no-cache';
+
       const res = await fetch(`/api/sessions?${params.toString()}`, {
         cache: isManualRefresh ? 'no-store' : 'default',
-        headers: isManualRefresh ? { 'Cache-Control': 'no-cache' } : {},
+        headers,
       });
 
       if (res.ok) {
         const data = await res.json();
-        setSessions(Array.isArray(data) ? data : []);
+        if (requestId === fetchSeqRef.current) setSessions(Array.isArray(data) ? data : []);
       } else {
         const errData = await res.json().catch(() => ({}));
+        if (requestId === fetchSeqRef.current) {
+          setSessions([]);
+          setMessage({ type: 'error', text: errData.error || '無法取得場次，請確認 LINE 登入後重試' });
+        }
         console.error('查詢場次異常:', res.status, errData);
       }
     } catch (err) {
+      if (requestId === fetchSeqRef.current) {
+        setSessions([]);
+        setMessage({ type: 'error', text: '查詢場次失敗，請重新整理' });
+      }
       console.error('查詢場次網路錯誤:', err);
     } finally {
-      setLoading(false);
+      if (requestId === fetchSeqRef.current) setLoading(false);
     }
   }
 
-  // 首次載入
+  // 等 LIFF 初始化完成、ID Token 就緒後再載入，避免匿名請求被群組隔離拒絕。
   const hasFetchedRef = useRef(false);
   useEffect(() => {
     document.title = '🏸 我要報名零打';
-    if (hasFetchedRef.current) return;
+    if (!isReady || hasFetchedRef.current) return;
+    if (isLoggedIn && !idToken) {
+      setLoading(false);
+      setMessage({ type: 'error', text: '無法取得 LINE 登入憑證，請從 LINE 重新開啟頁面' });
+      return;
+    }
     hasFetchedRef.current = true;
     fetchSessions();
-  }, []);
+  }, [isReady, isLoggedIn, idToken]);
 
   // 從私訊 / 圖文選單進入且無 groupId 時，載入球友本人實際所屬的啟用群組
   useEffect(() => {
-    if (currentGroupId || isCrossGroupAllowed) return;
+    if (!isReady || (isLoggedIn && !idToken) || currentGroupId || isCrossGroupAllowed) return;
     let cancelled = false;
     (async () => {
       const headers: Record<string, string> = {};
@@ -110,7 +130,7 @@ function SessionListContent() {
     return () => {
       cancelled = true;
     };
-  }, [currentGroupId, isCrossGroupAllowed, idToken, userProfile?.userId]);
+  }, [isReady, isLoggedIn, currentGroupId, isCrossGroupAllowed, idToken, userProfile?.userId]);
 
   const fetchRoster = async (sessionId: string) => {
     setRosterData((prev) => ({

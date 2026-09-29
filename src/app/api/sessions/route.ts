@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 import { lineClient } from '@/lib/line';
 import { verifyLineIdToken, isSuperAdmin } from '@/lib/auth';
-import { getAuthenticatedUserId, hasHostGroupPermission } from '@/lib/host-permissions';
+import { getAuthenticatedUserId, hasHostGroupPermission, isGlobalAdmin } from '@/lib/host-permissions';
 import { isUserInGroup } from '@/lib/line-group-auth';
 import {
   generateSessionCacheKey,
@@ -18,9 +18,6 @@ export const dynamic = 'force-dynamic';
 
 // 取得場次清單 (支援快取、自動過期清理、群組場次與全域公開場次)
 export async function GET(req: NextRequest) {
-  // 背景防抖執行過期場次自動清理 (依 EXPIRED_SESSION_CLEANUP_DAYS，預設 7 天；若為 0 則不清理)
-  cleanupExpiredSessions().catch((err) => console.warn('[Auto Cleanup] 執行異常:', err));
-
   const { searchParams } = new URL(req.url);
   // 1. 參數正規化 (去除多餘空白以防 Cache Key 碰撞)
   const groupId = searchParams.get('groupId')?.trim() || null;
@@ -33,10 +30,56 @@ export async function GET(req: NextRequest) {
     searchParams.get('refresh') === 'true' ||
     req.headers.get('cache-control')?.includes('no-cache');
 
+  // groupId 會用於 PostgREST 的 or 篩選條件，不接受分隔符或查詢運算子。
+  if (groupId && !/^[A-Za-z0-9_-]{1,128}$/.test(groupId)) {
+    return NextResponse.json({ error: '群組 ID 格式不正確' }, { status: 400 });
+  }
+
   const allowCrossGroup =
     (process.env.ALLOW_CROSS_GROUP_SESSIONS || process.env.NEXT_PUBLIC_ALLOW_CROSS_GROUP_SESSIONS || 'false').toLowerCase().trim() === 'true';
 
-  const cacheKey = generateSessionCacheKey({ groupId, sessionId, date, status, hostId, upcomingOnly, allowCrossGroup });
+  // 驗權必須發生在快取命中之前，否則匿名或已失去群組權限的請求仍可讀取舊快取。
+  const caller = await getAuthenticatedUserId(req);
+  let canListGroup = false;
+  let isAdmin = false;
+  let permittedGroups: string[] = [];
+
+  if (upcomingOnly) {
+    if (!allowCrossGroup && groupId) {
+      canListGroup = caller ? await isUserInGroup(groupId, caller) : false;
+      if (!canListGroup && !sessionId) {
+        return NextResponse.json(
+          { error: caller ? '非該群組成員，無法查看場次' : '請先登入以驗證群組成員身分' },
+          { status: caller ? 403 : 401 }
+        );
+      }
+    }
+  } else {
+    if (!caller) return NextResponse.json({ error: '請先登入以管理場次' }, { status: 401 });
+    isAdmin = await isGlobalAdmin(caller);
+    if (!isAdmin) {
+      if (hostId && hostId !== caller) {
+        return NextResponse.json({ error: '無權查看其他團主的場次' }, { status: 403 });
+      }
+      const { data, error } = await supabaseAdmin.from('host_group_permissions')
+        .select('group_id').eq('user_id', caller);
+      if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+      permittedGroups = (data || []).map((permission) => permission.group_id);
+      if (groupId && !permittedGroups.includes(groupId)) {
+        return NextResponse.json({ error: '無權查看此群組的場次' }, { status: 403 });
+      }
+      if (permittedGroups.length === 0) return NextResponse.json([]);
+    }
+  }
+
+  // 無權請求不應觸發背景清理；保留合法場次查詢時原有的過期清理行為。
+  cleanupExpiredSessions().catch((err) => console.warn('[Auto Cleanup] 執行異常:', err));
+
+  const effectiveHostId = !upcomingOnly && !isAdmin ? caller : hostId;
+  const scope = upcomingOnly
+    ? (allowCrossGroup ? 'cross' : groupId && canListGroup ? 'group' : sessionId ? 'link' : 'public')
+    : (isAdmin ? 'admin' : `host:${encodeURIComponent(caller!)}:groups=${[...permittedGroups].sort().map(encodeURIComponent).join(',')}`);
+  const cacheKey = `${generateSessionCacheKey({ groupId, sessionId, date, status, hostId: effectiveHostId, upcomingOnly, allowCrossGroup })}:scope=${scope}`;
   const ttl = getCacheTTLSeconds();
 
   // 2. 若非強制刷新，優先檢查記憶體快取 (命中時 0 次 Supabase 連線)
@@ -63,46 +106,28 @@ export async function GET(req: NextRequest) {
       .neq('status', 'deleted')
       .order('start_time', { ascending: true });
 
-    // 若指定團主 ID (例如團主後台僅看自己建立之場次)
-    if (hostId) {
-      query = query.eq('host_user_id', hostId);
-    }
+    // 團主不可透過自填 hostId 讀取他人場次，且只能看仍有授權的群組。
+    if (effectiveHostId) query = query.eq('host_user_id', effectiveHostId);
 
-    // 若為球友報名模式 (upcomingOnly)：
     if (upcomingOnly) {
       if (allowCrossGroup) {
-        // 🌟 全域開放模式 (ALLOW_CROSS_GROUP_SESSIONS=true)：
-        // 若帶有 groupId 則顯示本群 + 全域，若無帶 groupId 則顯示全站所有社團之開放場次
-        if (groupId) {
-          query = query.or(`group_id.eq.${groupId},group_id.is.null`);
-        }
+        // 明確開啟跨群模式時保留原有的公開查詢行為。
+        if (groupId) query = query.or(`group_id.eq.${groupId},group_id.is.null`);
+      } else if (groupId && canListGroup) {
+        query = query.or(`group_id.eq.${groupId},group_id.is.null`);
+      } else if (sessionId) {
+        // 分享連結只放行該場次，不把連結上的 groupId 視為群組成員證明。
+        query = query.eq('id', sessionId);
       } else {
-        // 🛡️ 嚴格社團隔離模式 (預設 ALLOW_CROSS_GROUP_SESSIONS=false)：
-        if (sessionId && groupId) {
-          // 既有特定場次 ID 又在特定群組
-          query = query.or(`group_id.eq.${groupId},group_id.is.null,id.eq.${sessionId}`);
-        } else if (sessionId) {
-          // 球友持有特定場次分享連結點入 (即使無 groupId 亦放行該場次與全域場次)
-          query = query.or(`group_id.is.null,id.eq.${sessionId}`);
-        } else if (groupId) {
-          // 在特定群組中，僅顯示該群專屬場次 + 全域公開場次 (group_id 為 null)
-          query = query.or(`group_id.eq.${groupId},group_id.is.null`);
-        } else {
-          // 🛡️ 嚴格隔離破口修補：若無提供 groupId 且無特定 sessionId，
-          // 絕對不洩漏任何特定群組的專屬場次，僅顯示全域公開場次 (group_id 為 null)
-          query = query.is('group_id', null);
-        }
+        query = query.is('group_id', null);
       }
 
       query = query.gt('start_time', new Date().toISOString());
-      if (!status) {
-        query = query.in('status', ['open', 'full']);
-      }
+      query = query.in('status', ['open', 'full']);
+    } else if (isAdmin) {
+      if (groupId) query = query.or(`group_id.eq.${groupId},group_id.is.null`);
     } else {
-      // 團主後台管理模式
-      if (groupId) {
-        query = query.or(`group_id.eq.${groupId},group_id.is.null`);
-      }
+      query = groupId ? query.eq('group_id', groupId) : query.in('group_id', permittedGroups);
     }
 
     if (status) {

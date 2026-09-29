@@ -61,13 +61,19 @@ export async function GET(req: NextRequest) {
     const isHostOwner = Boolean(
       session.host_user_id &&
       caller?.userId &&
-      session.host_user_id === caller.userId
+      session.host_user_id === caller.userId &&
+      session.group_id &&
+      await hasHostGroupPermission(caller.userId, session.group_id)
     );
     const isSuper = Boolean(caller?.isSuperAdmin);
     const canSeeFullRoster = isHostOwner || isSuper;
 
-    // 檢查該場次是否有綁定群組，若有且非管理員/本場主揪，檢查是否為該群成員
-    if (session.group_id && caller && !canSeeFullRoster) {
+    // 群組名冊（包含公開名冊）需先驗證 LINE 身分與實際群組成員資格；
+    // 沒登入時不可跳過檢查而讀取其他球友的報名姓名。
+    if (session.group_id && !canSeeFullRoster) {
+      if (!caller) {
+        return NextResponse.json({ error: '請先登入以驗證群組成員身分' }, { status: 401 });
+      }
       const isMember = await isUserInGroup(session.group_id, caller.userId);
       if (!isMember) {
         return NextResponse.json({ error: '非該群組成員，無法查看名單' }, { status: 403 });
