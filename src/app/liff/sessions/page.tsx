@@ -405,7 +405,7 @@ function SessionListContent() {
             : availableSessions
           ).map((s) => {
             const isTarget = s.id === targetSessionId;
-            const isFull = (s.current_players || 0) >= s.max_players;
+            const isFull = s.status === 'full' || (s.current_players || 0) >= s.max_players;
             const start = new Date(s.start_time);
             const end = new Date(s.end_time);
 

@@ -12,6 +12,7 @@ import {
   getCacheTTLSeconds,
 } from '@/lib/session-cache';
 import { promoteWaitlistOnCapacityIncrease } from '@/lib/registration-service';
+import { countPeople, registrationSessionStatus } from '@/lib/registration-rules';
 import { cleanupExpiredSessions } from '@/lib/session-cleanup';
 
 export const dynamic = 'force-dynamic';
@@ -670,13 +671,14 @@ export async function PATCH(req: NextRequest) {
     }
 
     // 5. 正取人數下限檢查：不可小於目前已報名之正取人數
-    const { data: mainRegs } = await supabaseAdmin
+    const { data: mainRegs, error: mainError } = await supabaseAdmin
       .from('registrations')
       .select('party_size')
       .eq('session_id', id)
       .eq('status', 'main');
+    if (mainError) return NextResponse.json({ error: mainError.message }, { status: 500 });
 
-    const currentMainCount = (mainRegs || []).reduce((sum, r) => sum + (r.party_size || 1), 0);
+    const currentMainCount = countPeople(mainRegs || []);
     const newMaxPlayers = Number(max_players) || existingSession.max_players;
 
     if (newMaxPlayers < currentMainCount) {
@@ -707,13 +709,12 @@ export async function PATCH(req: NextRequest) {
     if (notes !== undefined) updatePayload.notes = notes.trim();
     if (is_roster_public !== undefined) updatePayload.is_roster_public = Boolean(is_roster_public);
 
-    // 更新狀態
-    if (action === 'enable' || targetStatus === 'open') {
-      updatePayload.status = newMaxPlayers > currentMainCount ? 'open' : 'full';
-    } else if (newMaxPlayers > currentMainCount && existingSession.status !== 'cancelled') {
-      updatePayload.status = 'open';
-    } else if (newMaxPlayers === currentMainCount && existingSession.status !== 'cancelled') {
-      updatePayload.status = 'full';
+    // 編輯場次時也要保留候補優先權：只要有人排隊，就不能誤標為可直接報名。
+    if (action === 'enable' || targetStatus === 'open' || existingSession.status !== 'cancelled') {
+      const { data: queued, error: queueError } = await supabaseAdmin.from('registrations')
+        .select('id').eq('session_id', id).eq('status', 'waitlist');
+      if (queueError) return NextResponse.json({ error: queueError.message }, { status: 500 });
+      updatePayload.status = registrationSessionStatus(currentMainCount, newMaxPlayers, queued?.length || 0);
     }
 
     let { data: updatedSession, error: updateErr } = await supabaseAdmin

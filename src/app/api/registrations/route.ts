@@ -6,6 +6,7 @@ import { isUserInGroup } from '@/lib/line-group-auth';
 import { hasHostGroupPermission, isGlobalAdmin } from '@/lib/host-permissions';
 import { lineClient } from '@/lib/line';
 import { invalidateSessionCache } from '@/lib/session-cache';
+import { chooseRegistrationPlacement, countPeople, isValidPartySize, registrationSessionStatus } from '@/lib/registration-rules';
 
 async function getCallerIdentity(req: NextRequest): Promise<{ userId: string; role: string; isSuperAdmin: boolean } | null> {
   const authHeader = req.headers.get('authorization');
@@ -256,6 +257,9 @@ export async function POST(req: NextRequest) {
     if (!targetUserId) {
       return NextResponse.json({ error: '身分驗證未通過，無法報名' }, { status: 401 });
     }
+    if (!isValidPartySize(party_size)) {
+      return NextResponse.json({ error: '報名人數須為 1 至 3 人的整數' }, { status: 400 });
+    }
 
     // 1. 取得該場次
     const { data: session, error: sErr } = await supabaseAdmin
@@ -267,7 +271,7 @@ export async function POST(req: NextRequest) {
     if (sErr || !session) {
       return NextResponse.json({ error: '場次不存在' }, { status: 404 });
     }
-    if (body.user_id?.startsWith('proxy_')) {
+    if (typeof body.user_id === 'string' && body.user_id.startsWith('proxy_')) {
       if (!caller || !(session.group_id
         ? await hasHostGroupPermission(caller.userId, session.group_id)
         : await isGlobalAdmin(caller.userId))) {
@@ -297,41 +301,45 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // 計算目前正取人數
-    const { data: mainRegs } = await supabaseAdmin
+    if (party_size > session.max_players) {
+      return NextResponse.json({ error: '報名人數超過此場次正取上限，無法整組報名' }, { status: 400 });
+    }
+
+    // 一般球友同一場次不可同時佔有多筆有效名額；代報名使用各自的 proxy ID。
+    if (!targetUserId.startsWith('proxy_')) {
+      const { data: existing, error: existingError } = await supabaseAdmin
+        .from('registrations')
+        .select('id')
+        .eq('session_id', session_id)
+        .eq('user_id', targetUserId)
+        .in('status', ['main', 'waitlist'])
+        .limit(1);
+      if (existingError) return NextResponse.json({ error: existingError.message }, { status: 500 });
+      if (existing?.length) return NextResponse.json({ error: '您已報名或登記備取此場次，請勿重複報名' }, { status: 409 });
+    }
+
+    const { data: mainRegs, error: mainError } = await supabaseAdmin
       .from('registrations')
       .select('party_size')
       .eq('session_id', session_id)
       .eq('status', 'main');
+    if (mainError) return NextResponse.json({ error: mainError.message }, { status: 500 });
 
-    const currentMainCount = (mainRegs || []).reduce((sum, r) => sum + (r.party_size || 1), 0);
+    const { data: waitlistRegs, error: waitlistError } = await supabaseAdmin
+      .from('registrations')
+      .select('id, party_size, waitlist_order')
+      .eq('session_id', session_id)
+      .eq('status', 'waitlist');
+    if (waitlistError) return NextResponse.json({ error: waitlistError.message }, { status: 500 });
 
-    let status = 'main';
-    let waitlist_order = null;
-
-    if (currentMainCount + party_size > session.max_players) {
-      status = 'waitlist';
-
-      const { data: waitlistRegs } = await supabaseAdmin
-        .from('registrations')
-        .select('waitlist_order')
-        .eq('session_id', session_id)
-        .eq('status', 'waitlist')
-        .order('waitlist_order', { ascending: false })
-        .limit(1);
-
-      const maxOrder = waitlistRegs?.[0]?.waitlist_order || 0;
-      waitlist_order = maxOrder + 1;
-
-      if (waitlist_order > session.max_waitlist) {
-        return NextResponse.json({ error: '此場次正取與備取名額皆已額滿！' }, { status: 400 });
-      }
-
-      await supabaseAdmin
-        .from('match_sessions')
-        .update({ status: 'full' })
-        .eq('id', session_id);
+    const currentMainCount = countPeople(mainRegs || []);
+    const placement = chooseRegistrationPlacement(
+      currentMainCount, waitlistRegs || [], party_size, session.max_players, session.max_waitlist
+    );
+    if (!placement) {
+      return NextResponse.json({ error: '此場次正取與備取名額皆已額滿！' }, { status: 400 });
     }
+    const { status, waitlist_order } = placement;
 
     // 確保使用者在 users 表中有紀錄（外鍵約束防護）
     await supabaseAdmin.from('users').upsert(
@@ -360,6 +368,17 @@ export async function POST(req: NextRequest) {
 
     if (rErr) {
       return NextResponse.json({ error: rErr.message }, { status: 500 });
+    }
+
+    // 插入成功後才更新場次狀態，避免報名失敗卻被誤標為額滿。
+    const nextStatus = registrationSessionStatus(
+      currentMainCount + (status === 'main' ? party_size : 0), session.max_players,
+      (waitlistRegs || []).length + (status === 'waitlist' ? 1 : 0)
+    );
+    if (nextStatus !== session.status) {
+      const { error: statusError } = await supabaseAdmin.from('match_sessions')
+        .update({ status: nextStatus }).eq('id', session_id);
+      if (statusError) console.error('更新場次報名狀態失敗:', statusError);
     }
 
     // 🔄 立即失效場次快取，確保球友報名後名額即時扣除
