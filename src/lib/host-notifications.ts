@@ -2,6 +2,8 @@ import { supabaseAdmin } from './supabase';
 import { lineClient } from './line';
 import { hasHostGroupPermission } from './host-permissions';
 import { getEmailConfiguration, isEmailNotificationsEnabled, isHostLineNotificationsEnabled, sendNotificationEmail } from './email-notifications';
+import { countPeople } from './registration-rules';
+import { formatHostNotificationText, formatHostRegistrationProgress } from './host-notification-content';
 
 type HostEvent = 'registered' | 'cancelled';
 
@@ -13,11 +15,12 @@ export async function notifyHostOfRegistration(registrationId: string, eventType
 
   try {
     const { data: registration, error } = await supabaseAdmin.from('registrations')
-      .select('id, user_id, player_name, party_size, status, session_id, match_sessions(id, group_id, host_user_id, title, start_time)')
+      .select('id, user_id, player_name, party_size, status, session_id, match_sessions(id, group_id, host_user_id, title, start_time, max_players, max_waitlist)')
       .eq('id', registrationId).maybeSingle();
     if (error || !registration) throw new Error(error?.message || '找不到報名紀錄');
     const session = registration.match_sessions as unknown as {
       id: string; group_id: string | null; host_user_id: string; title: string; start_time: string;
+      max_players: number; max_waitlist: number;
     } | null;
     if (!session?.group_id || actorUserId === session.host_user_id || registration.user_id.startsWith('proxy_')) return;
     if (!(await hasHostGroupPermission(session.host_user_id, session.group_id))) return;
@@ -40,10 +43,37 @@ export async function notifyHostOfRegistration(registrationId: string, eventType
       eventId = event.id;
     }
 
+    let groupName: string | null = null;
+    try {
+      const { data: group, error: groupError } = await supabaseAdmin.from('groups')
+        .select('group_name').eq('group_id', session.group_id).maybeSingle();
+      if (groupError) throw new Error(groupError.message);
+      groupName = group?.group_name || null;
+    } catch (lookupError) {
+      console.warn('團主通知查詢球團名稱失敗:', lookupError instanceof Error ? lookupError.message : '未知錯誤');
+    }
+
+    let progress: string | null = null;
+    try {
+      const { data: active, error: progressError } = await supabaseAdmin.from('registrations')
+        .select('party_size, status').eq('session_id', session.id).in('status', ['main', 'waitlist']);
+      if (progressError) throw new Error(progressError.message);
+      const registrations = active || [];
+      progress = formatHostRegistrationProgress(
+        countPeople(registrations.filter((item) => item.status === 'main')), session.max_players,
+        countPeople(registrations.filter((item) => item.status === 'waitlist')), session.max_waitlist
+      );
+    } catch (lookupError) {
+      console.warn('團主通知查詢報名進度失敗:', lookupError instanceof Error ? lookupError.message : '未知錯誤');
+    }
+
     const action = eventType === 'registered'
       ? (registration.status === 'waitlist' ? '登記備取' : '報名正取')
       : '取消報名';
-    const text = `【羽球零打小幫手】${action}\n場次：${session.title}\n時間：${new Date(session.start_time).toLocaleString('zh-TW', { timeZone: 'Asia/Taipei' })}\n球友：${registration.player_name}\n人數：${registration.party_size}`;
+    const text = formatHostNotificationText({
+      action, groupName, sessionTitle: session.title, startTime: session.start_time,
+      playerName: registration.player_name, partySize: registration.party_size, progress,
+    });
     let emailState: 'sent' | 'failed' | 'skipped' = 'skipped';
     let lineState: 'sent' | 'failed' | 'skipped' = 'skipped';
 
