@@ -52,10 +52,30 @@ test('Full 使用 HTTP API 寄信，不將 API key 放進郵件內容', async ()
       const body = JSON.parse(options.body);
       assert.deepEqual(body.to, ['host@example.com']);
       assert.equal(body.text, '一筆新的正取報名');
+      assert.equal(body.html, '<strong>已正取</strong>');
       assert.equal(body.text.includes('test-key-not-real'), false);
       return { ok: true };
     };
-    await sendNotificationEmail('host@example.com', '報名通知', '一筆新的正取報名');
+    await sendNotificationEmail('host@example.com', '報名通知', '一筆新的正取報名', '<strong>已正取</strong>');
+  } finally {
+    globalThis.fetch = originalFetch;
+    restore();
+  }
+});
+
+test('驗證信保持純文字，不附加 HTML', async () => {
+  const originalFetch = globalThis.fetch;
+  try {
+    process.env.EMAIL_NOTIFICATIONS_ENABLED = 'true';
+    process.env.RESEND_API_KEY = 'test-key-not-real';
+    process.env.EMAIL_FROM = 'JuJu <notify@example.com>';
+    globalThis.fetch = async (_url, options) => {
+      const body = JSON.parse(options.body);
+      assert.equal(body.text, '您的驗證碼');
+      assert.equal(Object.hasOwn(body, 'html'), false);
+      return { ok: true };
+    };
+    await sendNotificationEmail('host@example.com', '驗證通知', '您的驗證碼');
   } finally {
     globalThis.fetch = originalFetch;
     restore();

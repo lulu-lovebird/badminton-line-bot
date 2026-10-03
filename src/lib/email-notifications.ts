@@ -23,12 +23,12 @@ export function getEmailConfiguration(): { apiKey: string; from: string } {
   return { apiKey, from };
 }
 
-export async function sendNotificationEmail(to: string, subject: string, text: string): Promise<void> {
+export async function sendNotificationEmail(to: string, subject: string, text: string, html?: string): Promise<void> {
   const { apiKey, from } = getEmailConfiguration();
   const response = await fetch('https://api.resend.com/emails', {
     method: 'POST',
     headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ from, to: [to], subject, text }),
+    body: JSON.stringify({ from, to: [to], subject, text, ...(html ? { html } : {}) }),
     signal: AbortSignal.timeout(10000),
   });
   if (!response.ok) throw new Error(`Email 服務寄送失敗（HTTP ${response.status}）`);

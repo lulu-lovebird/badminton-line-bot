@@ -3,7 +3,7 @@ import { lineClient } from './line';
 import { hasHostGroupPermission } from './host-permissions';
 import { getEmailConfiguration, isEmailNotificationsEnabled, isHostLineNotificationsEnabled, sendNotificationEmail } from './email-notifications';
 import { countPeople } from './registration-rules';
-import { formatHostNotificationText, formatHostRegistrationProgress } from './host-notification-content';
+import { formatHostNotificationHtml, formatHostNotificationText, formatHostRegistrationProgress } from './host-notification-content';
 
 type HostEvent = 'registered' | 'cancelled';
 
@@ -70,16 +70,17 @@ export async function notifyHostOfRegistration(registrationId: string, eventType
     const action = eventType === 'registered'
       ? (registration.status === 'waitlist' ? '登記備取' : '報名正取')
       : '取消報名';
-    const text = formatHostNotificationText({
+    const details = {
       action, groupName, sessionTitle: session.title, startTime: session.start_time,
       playerName: registration.player_name, partySize: registration.party_size, progress,
-    });
+    };
+    const text = formatHostNotificationText(details);
     let emailState: 'sent' | 'failed' | 'skipped' = 'skipped';
     let lineState: 'sent' | 'failed' | 'skipped' = 'skipped';
 
     if (email) {
       try {
-        await sendNotificationEmail(email, `零打通知：${action}－${session.title}`, text);
+        await sendNotificationEmail(email, `零打通知：${action}－${session.title}`, text, formatHostNotificationHtml(details));
         emailState = 'sent';
       } catch (sendError) {
         emailState = 'failed';
