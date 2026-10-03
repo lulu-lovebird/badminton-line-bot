@@ -9,7 +9,7 @@ export const metadata: Metadata = {
 };
 
 export default function TermsOfUsePage() {
-  const lastUpdated = '2026 年 9 月 13 日';
+  const lastUpdated = '2026 年 10 月 2 日';
 
   return (
     <main className="min-h-screen bg-slate-50 text-slate-800 py-12 px-4 sm:px-6 lg:px-8">
@@ -26,7 +26,7 @@ export default function TermsOfUsePage() {
             </div>
           </div>
           <p className="text-xs sm:text-sm text-slate-300 leading-relaxed mt-3">
-            感謝您使用「羽球零打小幫手 JuJu」（以下簡稱「本服務」）。當您開始使用本服務、透過 LINE 登入或點擊報名時，即表示您已閱讀、瞭解並同意遵守本服務條款。
+            感謝您使用由 Bean, Bird & Badminton Tech Consulting 提供及營運的「羽球零打小幫手 JuJu」（以下簡稱「本服務」）。當您開始使用本服務、透過 LINE 登入或點擊報名時，即表示您已閱讀、瞭解並同意遵守本服務條款。
           </p>
           <div className="mt-4 text-[11px] text-slate-400">
             最近更新日期：{lastUpdated}
@@ -126,7 +126,7 @@ export default function TermsOfUsePage() {
               進入 JuJu 導航大廳
             </Link>
           </div>
-          <div>© {new Date().getFullYear()} 羽球零打小幫手 JuJu. All rights reserved.</div>
+          <div>Developed with ❤️ by Bean, Bird & Badminton Tech Consulting</div>
         </div>
       </div>
     </main>

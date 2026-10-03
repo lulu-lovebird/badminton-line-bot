@@ -258,7 +258,8 @@ erDiagram
 | `GET` | `/api/auth/me` | 驗證 LINE ID Token，回傳個人檔案、角色與是否為 Super Admin | 登入球友 |
 | `GET` | `/api/sessions` | 查詢開放場次（支援 `date`, `status`, `groupId` 篩選，內建過期自動清理節流） | 群組成員 / 公開 |
 | `GET` | `/api/groups` | 查詢登入者可開團的啟用群組；申請用清單另以 `forApplication=true` 查詢 | LINE 登入 |
-| `GET / POST / PATCH` | `/api/host-applications` | 查詢、依群組申請及審核團主資格 | 本人查詢／群組成員申請／最高管理員審核 |
+| `GET / POST / PATCH` | `/api/host-applications` | 查詢、依群組申請及審核團主資格；Full 模式申請時需填 Email | 本人查詢／群組成員申請／最高管理員審核 |
+| `GET / POST / PATCH` | `/api/host-contact` | 取得可選通知能力、設定團主 Email／驗證碼驗證；Lite 模式不讀取 Email 表 | LINE 登入本人（Full 模式） |
 | `POST` | `/api/sessions` | 必選本人獲授權的啟用群組建立場次；預設不設季打優惠，建立後由團主自行分享 Flex 卡片；拒絕 Bot 群組推播參數 | 該群已授權團主／最高管理員 |
 | `PATCH` | `/api/sessions` | 編輯場次內容或變更狀態（如停用 `status: 'cancelled'`、重新啟用 `status: 'open'`） | 團主 / 超級管理員 |
 | `DELETE` | `/api/sessions` | 刪除場次（原子級聯刪除該場次所有球友報名與候補名單） | 團主 / 超級管理員 |
@@ -272,6 +273,12 @@ erDiagram
 | `GET / POST / PATCH / DELETE` | `/api/admin/host-groups` | 查詢、新增、修改、刪除團主與群組的授權關係 | 超級管理員 (`admin`) |
 
 > `users.role = 'host'` 是使用者角色標示，並非開團憑證；授權是否有效以群組關係為準。
+
+### 團主通知：同一版程式的 Lite / Full
+
+預設 `EMAIL_NOTIFICATIONS_ENABLED=false`、`HOST_LINE_NOTIFICATIONS_ENABLED=false`：不需要 Resend、DNS 或 Email migration，球友報名／取消不主動通知團主，保留原本的 LIFF 報名與 Share Flex Card。Full 模式先執行 `supabase/migrations/20261002_optional_host_email_notifications.sql`，並設定 Resend 寄件網域、`RESEND_API_KEY` 與 `EMAIL_FROM` 後才開啟 Email。新申請須填 Email，已授權團主也可補填；須回到已登入 LIFF 輸入 Email 驗證碼後，才寄送該場正取、備取及取消通知。私人 Email、驗證碼雜湊與去重狀態僅存於已開啟 RLS 且撤銷 anon/authenticated 存取權的獨立資料表。
+
+單場通知以原始主揪為唯一對象，不因團主按代報名／移除而寄給自己；通知失敗不撤銷報名或取消。LINE 主動私訊為獨立開關，啟用時讀取官方帳號當月用量並保留至少 50 則供既有用途，不推播群組；Email 不耗 LINE 額度。事件紀錄可追蹤失敗，**目前沒有排程自動重試**。
 
 ---
 

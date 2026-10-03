@@ -9,7 +9,7 @@ export const metadata: Metadata = {
 };
 
 export default function PrivacyPolicyPage() {
-  const lastUpdated = '2026 年 9 月 13 日';
+  const lastUpdated = '2026 年 10 月 2 日';
 
   return (
     <main className="min-h-screen bg-slate-50 text-slate-800 py-12 px-4 sm:px-6 lg:px-8">
@@ -26,7 +26,7 @@ export default function PrivacyPolicyPage() {
             </div>
           </div>
           <p className="text-xs sm:text-sm text-emerald-50/90 leading-relaxed mt-3">
-            歡迎使用「羽球零打小幫手 JuJu」（以下簡稱「本服務」）。本服務極為重視您的隱私權與個人資料保護，特此依中華民國《個人資料保護法》及 LINE 平台開發者規範訂定本隱私權政策。
+            歡迎使用「羽球零打小幫手 JuJu」（以下簡稱「本服務」）。本服務由 Bean, Bird & Badminton Tech Consulting 提供及營運。本服務極為重視您的隱私權與個人資料保護，特此依中華民國《個人資料保護法》及 LINE 平台開發者規範訂定本隱私權政策。
           </p>
           <div className="mt-4 text-[11px] text-emerald-200">
             最近更新日期：{lastUpdated}
@@ -49,6 +49,7 @@ export default function PrivacyPolicyPage() {
               <li>場次名額釋出時，透過 LINE 官方帳號發送自動遞補成功通知與出席提醒。</li>
               <li>球團主揪於現場核對球友身分、點名與繳費收款狀態標記。</li>
               <li>球團緊急異動（如暴雨停辦、場館變更）之推播通知。</li>
+              <li>僅在管理員啟用 Email 通知時，團主可提供並驗證聯絡信箱，供寄送該場球友報名及取消通知；未啟用時不蒐集信箱。</li>
             </ul>
           </section>
 
@@ -75,6 +76,7 @@ export default function PrivacyPolicyPage() {
                 <p className="text-[11px] text-slate-500">您於 LINE 設定之公開暱稱與頭像縮圖，僅用於場次名單顯示及球團團主現場點名核對。</p>
               </div>
             </div>
+            <p className="text-[11px] text-slate-500">若啟用團主 Email 通知，另蒐集團主自行填寫的信箱與驗證狀態；報名通知只寄至驗證完成的原始主揪信箱。寄信由 Resend 作為郵件處理服務商，所需之團主信箱及郵件通知內容會交由其處理。</p>
             <p className="text-[11px] text-emerald-800 bg-emerald-50 p-2.5 rounded-xl border border-emerald-100">
               🔒 <strong>隱私保證：</strong>本服務絕不蒐集您的 LINE 密碼、真實身分證字號、電話號碼、私人通訊紀錄或好友通訊錄。
             </p>
@@ -89,7 +91,7 @@ export default function PrivacyPolicyPage() {
             <ul className="list-disc pl-5 space-y-1.5">
               <li><strong>期間：</strong>本服務運作期間，或至您要求刪除個人資料或停止使用本服務為止。</li>
               <li><strong>地區：</strong>中華民國境內及 LINE 平台雲端基礎設施所在區域。</li>
-              <li><strong>對象：</strong>僅限本服務系統與該零打場次所屬之開團團主點名對帳使用。本服務絕不會將您的個資出售、交換或提供給任何無關之第三方廣告商或行銷單位。</li>
+              <li><strong>對象：</strong>僅限本服務系統與該零打場次所屬之開團團主點名對帳使用。若啟用 Email 通知，必要的寄送資訊由 Resend 依其服務條款處理。本服務絕不會將您的個資出售、交換或提供給任何無關之第三方廣告商或行銷單位。</li>
             </ul>
           </section>
 
@@ -146,7 +148,7 @@ export default function PrivacyPolicyPage() {
               進入 JuJu 導航大廳
             </Link>
           </div>
-          <div>© {new Date().getFullYear()} 羽球零打小幫手 JuJu. All rights reserved.</div>
+          <div>Developed with ❤️ by Bean, Bird & Badminton Tech Consulting</div>
         </div>
       </div>
     </main>
