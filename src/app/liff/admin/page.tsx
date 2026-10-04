@@ -152,6 +152,11 @@ function AdminDashboardContent() {
   } | null>(null);
   const [applyReason, setApplyReason] = useState('');
   const [isApplying, setIsApplying] = useState(false);
+  const [emailFeature, setEmailFeature] = useState<{ email_enabled: boolean; email: string | null; verified: boolean }>({ email_enabled: false, email: null, verified: false });
+  const [contactEmail, setContactEmail] = useState('');
+  const [emailCode, setEmailCode] = useState('');
+  const [emailContactError, setEmailContactError] = useState('');
+  const [emailContactBusy, setEmailContactBusy] = useState(false);
 
   // 緊急廣播與群組推播狀態
   const [broadcastMsg, setBroadcastMsg] = useState('');
@@ -478,6 +483,7 @@ function AdminDashboardContent() {
       if (res.ok) {
         const user = await res.json();
         setUserProfile(user);
+        await loadHostEmailContact(token, user.line_user_id);
         const contextGroupId = liff?.getContext()?.groupId || '';
         const requestedId = targetGroupId ?? (urlGroupId || contextGroupId);
         const [groupRes, candidateRes, appRes] = await Promise.all([
@@ -965,8 +971,69 @@ function AdminDashboardContent() {
     }
   }
 
+  async function loadHostEmailContact(token: string, userId: string) {
+    try {
+      const headers: Record<string, string> = token
+        ? { Authorization: `Bearer ${token}` }
+        : { 'x-test-user-id': userId };
+      const res = await fetch('/api/host-contact', { headers, cache: 'no-store' });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || '無法取得 Email 通知狀態');
+      setEmailFeature({ email_enabled: Boolean(data.email_enabled), email: data.email || null, verified: Boolean(data.verified) });
+      setContactEmail(data.email || '');
+      setEmailContactError('');
+    } catch (error) {
+      setEmailContactError(error instanceof Error ? error.message : 'Email 通知設定不可用');
+    }
+  }
+
+  async function saveHostEmailContact() {
+    if (!contactEmail.trim() || emailContactBusy) return;
+    setEmailContactBusy(true);
+    setEmailContactError('');
+    try {
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      if (idToken) headers.Authorization = `Bearer ${idToken}`;
+      else if (userProfile?.line_user_id) headers['x-test-user-id'] = userProfile.line_user_id;
+      const res = await fetch('/api/host-contact', { method: 'POST', headers, body: JSON.stringify({ email: contactEmail.trim() }) });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || '寄送驗證信失敗');
+      setEmailFeature((prev) => ({ ...prev, email: contactEmail.trim().toLowerCase(), verified: data.result === 'verified' }));
+      alert(data.result === 'verified' ? '此信箱已驗證' : '驗證碼已寄出，請至信箱收信並輸入驗證碼');
+    } catch (error) {
+      setEmailContactError(error instanceof Error ? error.message : '寄送驗證信失敗');
+    } finally {
+      setEmailContactBusy(false);
+    }
+  }
+
+  async function confirmHostEmailCode() {
+    if (!emailCode.trim() || emailContactBusy) return;
+    setEmailContactBusy(true);
+    setEmailContactError('');
+    try {
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      if (idToken) headers.Authorization = `Bearer ${idToken}`;
+      else if (userProfile?.line_user_id) headers['x-test-user-id'] = userProfile.line_user_id;
+      const res = await fetch('/api/host-contact', { method: 'PATCH', headers, body: JSON.stringify({ code: emailCode.trim() }) });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || '驗證失敗');
+      setEmailFeature((prev) => ({ ...prev, verified: true }));
+      setEmailCode('');
+      alert('✅ 通知信箱已驗證，團主報名通知將寄至此信箱');
+    } catch (error) {
+      setEmailContactError(error instanceof Error ? error.message : '驗證失敗');
+    } finally {
+      setEmailContactBusy(false);
+    }
+  }
+
   async function handleApplyHost() {
     if (!userProfile?.line_user_id || !selectedGroupId) return;
+    if (emailFeature.email_enabled && !contactEmail.trim()) {
+      alert('請先填寫團主通知 Email');
+      return;
+    }
     setIsApplying(true);
     try {
       const headers: Record<string, string> = { 'Content-Type': 'application/json' };
@@ -979,11 +1046,16 @@ function AdminDashboardContent() {
         body: JSON.stringify({
           group_id: selectedGroupId,
           reason: applyReason.trim(),
+          ...(emailFeature.email_enabled ? { email: contactEmail.trim() } : {}),
         }),
       });
       const data = await res.json();
       if (res.ok) {
-        alert('🎉 團主資格申請已成功送出！請靜待系統最高管理員審核。');
+        alert(data.email_verification === 'sent'
+          ? '🎉 申請已送出，請到信箱取得驗證碼，並在本頁完成驗證。'
+          : '🎉 團主資格申請已成功送出！請靜待系統最高管理員審核。');
+        if (data.email_verification === 'failed') setEmailContactError('申請已送出，但驗證信寄送失敗。請使用下方設定重新寄送。');
+        if (data.email_verification === 'sent') setEmailFeature((prev) => ({ ...prev, email: contactEmail.trim().toLowerCase(), verified: false }));
         setApplication({
           status: 'pending',
           reason: applyReason.trim(),
@@ -998,6 +1070,34 @@ function AdminDashboardContent() {
       setIsApplying(false);
     }
   }
+
+  const emailContactPanel = emailFeature.email_enabled && (isAuthorized || application?.status === 'pending') && (
+    <div className="mt-3 p-3.5 bg-white rounded-2xl border border-slate-200 text-left text-xs w-full shadow-sm space-y-2">
+      <div className="font-bold text-slate-800">📧 團主報名通知 Email</div>
+      <p className="text-slate-500">只有完成驗證的信箱才會收到該場報名與取消通知；LINE 團主通知預設關閉。</p>
+      <input
+        type="email"
+        aria-label="團主通知 Email"
+        value={contactEmail}
+        onChange={(e) => setContactEmail(e.target.value)}
+        placeholder="name@example.com"
+        className="w-full p-2 border rounded-lg"
+      />
+      <div className="flex items-center gap-2">
+        <button type="button" disabled={emailContactBusy || !contactEmail.trim() || (emailFeature.verified && emailFeature.email === contactEmail.trim().toLowerCase())} onClick={saveHostEmailContact} className="px-3 py-1.5 bg-emerald-600 text-white rounded-lg disabled:opacity-50">
+          {emailFeature.verified && emailFeature.email === contactEmail.trim().toLowerCase() ? '✓ 已驗證' : '寄送驗證碼 / 更新信箱'}
+        </button>
+        {emailFeature.verified && emailFeature.email === contactEmail.trim().toLowerCase() && <span className="text-emerald-700">通知已啟用</span>}
+      </div>
+      {(!emailFeature.verified || emailFeature.email !== contactEmail.trim().toLowerCase()) && (
+        <div className="flex gap-2">
+          <input type="text" aria-label="Email 驗證碼" value={emailCode} onChange={(e) => setEmailCode(e.target.value)} placeholder="貼上信中的 24 碼驗證碼" maxLength={24} className="min-w-0 flex-1 p-2 border rounded-lg" />
+          <button type="button" disabled={emailContactBusy || !emailCode.trim()} onClick={confirmHostEmailCode} className="px-3 py-1.5 bg-blue-600 text-white rounded-lg disabled:opacity-50">驗證</button>
+        </div>
+      )}
+      {emailContactError && <p role="alert" className="text-red-600">{emailContactError}</p>}
+    </div>
+  );
 
   if (loading) {
     return (
@@ -1050,6 +1150,9 @@ function AdminDashboardContent() {
           </div>
         )}
 
+        {emailContactPanel}
+        {emailContactError && !emailFeature.email_enabled && <p role="alert" className="mt-3 text-xs text-red-600">Email 設定錯誤：{emailContactError}</p>}
+
         {/* 上次被駁回狀態提示 */}
         {isRejected && (
           <div className="mt-3 p-3.5 bg-red-50 rounded-2xl border border-red-200 text-left text-xs w-full shadow-sm text-red-900 space-y-1">
@@ -1101,6 +1204,13 @@ function AdminDashboardContent() {
                 className="w-full text-xs p-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500"
               />
             </div>
+            {emailFeature.email_enabled && (
+              <div>
+                <label className="text-[10px] text-slate-600 font-bold block mb-1">團主通知 Email（必填）</label>
+                <input type="email" required value={contactEmail} onChange={(e) => setContactEmail(e.target.value)} placeholder="name@example.com" className="w-full text-xs p-2.5 border rounded-xl" />
+                <p className="text-[10px] text-slate-500 mt-1">申請後須完成信箱驗證才會寄送報名通知。</p>
+              </div>
+            )}
             <button
               type="button"
               disabled={isApplying}
@@ -1148,6 +1258,9 @@ function AdminDashboardContent() {
           <span>📖 團主使用手冊</span>
         </Link>
       </div>
+
+      {emailContactPanel}
+      {emailContactError && !emailFeature.email_enabled && <p role="alert" className="mb-3 text-xs text-red-600">Email 設定錯誤：{emailContactError}</p>}
 
       <div className="flex bg-white rounded-2xl p-1 shadow-sm mb-4 border border-slate-200">
         <button

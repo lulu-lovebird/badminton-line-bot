@@ -118,6 +118,18 @@
 | `EXPIRED_SESSION_CLEANUP_DAYS` | 選填 | 歷史過期場次自動清理天數，預設 `7` 天。設為 `0` 則不刪除過期場次 |
 | `ALLOW_CROSS_GROUP_SESSIONS` | 選填 | 是否允許跨社團查看零打場次。預設為 `false`（嚴格社團隔離封閉模式，群組場次僅該群可見）；設為 `true` 則開啟全域撮合模式（任何管道與私訊皆可瀏覽全站所有球團之開放場次） |
 
+#### 可選：Full 團主 Email 通知（Lite 使用者可直接略過）
+
+預設 `EMAIL_NOTIFICATIONS_ENABLED=false`，**不需提供 Resend 金鑰或設定 DNS**，上方一鍵部署按鈕亦不要求 Email 欄位。現有 Lite 專案不必執行 Email migration；新專案的 `schema.sql` 雖含受保護的可選表，但功能關閉時不會存取它們。
+
+若要啟用 Full，請依序：
+1. 在 Supabase SQL Editor 執行 [`supabase/migrations/20261002_optional_host_email_notifications.sql`](supabase/migrations/20261002_optional_host_email_notifications.sql)。不要把既有場次或報名資料刪除。
+2. 在 [Resend](https://resend.com/) 驗證可管理 DNS 的寄件網域（`*.vercel.app` 無法作寄件網域）。
+3. 在 **Vercel 的 Production / Preview 各環境**分別設定 `EMAIL_NOTIFICATIONS_ENABLED=true`、`RESEND_API_KEY`（只存環境變數）以及 `EMAIL_FROM=JuJu <notify@已驗證網域>`，再重新部署；沒有完整設定時後台會顯示錯誤。勿將金鑰寫入程式或貼到對話。
+4. 新團主在申請表填 Email；既有團主可在後台補填，收取驗證碼並輸入驗證。驗證前不寄含球友報名資料的通知；寄送失敗可在資料庫 `host_notification_events` 檢查，現階段未提供自動重試。
+
+`HOST_LINE_NOTIFICATIONS_ENABLED=false` 為獨立開關。僅在明確改為 `true` 時主動私訊原始團主，會消耗 LINE 官方帳號的共用推播額度；不會恢復群組 Bot 推播。
+
 4. 點擊 **"Deploy"**！
 5. 等待約 1 分鐘，看到滿天彩帶畫面即代表部署成功！請複製 Vercel 提供給您的正式網址（例如：`https://badminton-line-bot-xxx.vercel.app`）。
 

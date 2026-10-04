@@ -3,6 +3,8 @@ import { supabaseAdmin } from '@/lib/supabase';
 import { lineClient } from '@/lib/line';
 import { getAuthenticatedUserId, hasHostGroupPermission, isGlobalAdmin } from '@/lib/host-permissions';
 import { isUserInGroup } from '@/lib/line-group-auth';
+import { getEmailConfiguration, isEmailNotificationsEnabled, normalizeNotificationEmail } from '@/lib/email-notifications';
+import { requestEmailVerification } from '@/lib/host-email-contact';
 
 export const dynamic = 'force-dynamic';
 
@@ -37,7 +39,15 @@ export async function POST(req: NextRequest) {
   try {
     const caller = await getAuthenticatedUserId(req);
     if (!caller) return NextResponse.json({ error: '請先登入' }, { status: 401 });
-    const { group_id, reason } = await req.json();
+    const { group_id, reason, email: requestedEmail } = await req.json();
+    const email = isEmailNotificationsEnabled() ? normalizeNotificationEmail(requestedEmail) : null;
+    if (isEmailNotificationsEnabled()) {
+      getEmailConfiguration();
+      if (!email) return NextResponse.json({ error: '申請團主需填寫有效的通知 Email' }, { status: 400 });
+      // 啟用 Full 模式前須先執行 migration；未就緒時不可建立無法設定信箱的新申請。
+      const { error: contactError } = await supabaseAdmin.from('host_notification_contacts').select('user_id').limit(0);
+      if (contactError) return NextResponse.json({ error: 'Email 資料表未就緒，請先執行 Full migration' }, { status: 503 });
+    }
     if (typeof group_id !== 'string' || !group_id.trim()) {
       return NextResponse.json({ error: '請選擇申請的群組' }, { status: 400 });
     }
@@ -65,6 +75,16 @@ export async function POST(req: NextRequest) {
     if (error?.code === '23505') return NextResponse.json({ error: '此群組已有待審核申請' }, { status: 409 });
     if (error) throw new Error(error.message);
 
+    let emailVerification: 'sent' | 'verified' | 'failed' | null = null;
+    if (email) {
+      try {
+        emailVerification = await requestEmailVerification(caller, email);
+      } catch (verificationError) {
+        emailVerification = 'failed';
+        console.warn('團主申請成功，但 Email 驗證信未寄出:', verificationError instanceof Error ? verificationError.message : '未知錯誤');
+      }
+    }
+
     for (const adminId of (process.env.SUPER_ADMIN_LINE_IDS || '').split(',').map((s) => s.trim()).filter(Boolean)) {
       try {
         await lineClient.pushMessage({
@@ -75,7 +95,7 @@ export async function POST(req: NextRequest) {
         console.warn('發送管理員申請通知失敗:', err);
       }
     }
-    return NextResponse.json({ success: true, application: app });
+    return NextResponse.json({ success: true, application: app, email_verification: emailVerification });
   } catch (err: unknown) {
     return NextResponse.json({ error: err instanceof Error ? err.message : '申請失敗' }, { status: 500 });
   }

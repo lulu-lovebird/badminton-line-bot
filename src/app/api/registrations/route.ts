@@ -7,6 +7,7 @@ import { hasHostGroupPermission, isGlobalAdmin } from '@/lib/host-permissions';
 import { lineClient } from '@/lib/line';
 import { invalidateSessionCache } from '@/lib/session-cache';
 import { chooseRegistrationPlacement, countPeople, isValidPartySize, registrationSessionStatus } from '@/lib/registration-rules';
+import { notifyHostOfRegistration } from '@/lib/host-notifications';
 
 async function getCallerIdentity(req: NextRequest): Promise<{ userId: string; role: string; isSuperAdmin: boolean } | null> {
   const authHeader = req.headers.get('authorization');
@@ -383,6 +384,7 @@ export async function POST(req: NextRequest) {
 
     // 🔄 立即失效場次快取，確保球友報名後名額即時扣除
     invalidateSessionCache();
+    await notifyHostOfRegistration(newReg.id, 'registered', caller?.userId || targetUserId);
 
     return NextResponse.json(newReg, { status: 201 });
   } catch (err: unknown) {
@@ -438,7 +440,9 @@ export async function PATCH(req: NextRequest) {
         }
       }
 
-      await cancelRegistrationAndPromote(registration_id);
+      await cancelRegistrationAndPromote(registration_id, () =>
+        notifyHostOfRegistration(registration_id, 'cancelled', caller.userId)
+      );
       // 🔄 立即失效場次快取，確保遞補與釋出名額即時呈現
       invalidateSessionCache();
       return NextResponse.json({ message: '已取消報名並完成遞補程序' });

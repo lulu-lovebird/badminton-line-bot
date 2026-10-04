@@ -3,6 +3,7 @@ import { lineClient } from './line';
 import { MatchSession, Registration } from '@/types/database';
 import { invalidateSessionCache } from './session-cache';
 import { choosePromotions, countPeople, registrationSessionStatus } from './registration-rules';
+import { finalizeEffectiveCancellation } from './cancellation-finalization';
 
 // 取消與擴額共用同一套嚴格順位規則：整組遞補，不跳過排在前面的多人組。
 async function reconcileWaitlist(session: MatchSession, notificationType: 'cancel' | 'capacity') {
@@ -84,14 +85,14 @@ async function reconcileWaitlist(session: MatchSession, notificationType: 'cance
 }
 
 /** 取消報名，按整組人數與原順位遞補，並重新編排剩餘備取順位。 */
-export async function cancelRegistrationAndPromote(registrationId: string) {
+export async function cancelRegistrationAndPromote(registrationId: string, onCancelled?: () => Promise<void>) {
   const { data: reg, error: fetchError } = await supabaseAdmin
     .from('registrations')
     .select('*, match_sessions(*)')
     .eq('id', registrationId)
     .single();
   if (fetchError || !reg) throw new Error('找不到該報名紀錄');
-  if (reg.status === 'cancelled') return { success: true };
+  if (reg.status === 'cancelled') return { success: true, changed: false };
 
   const { data: cancelled, error: cancelError } = await supabaseAdmin
     .from('registrations')
@@ -101,10 +102,18 @@ export async function cancelRegistrationAndPromote(registrationId: string) {
     .select('id')
     .maybeSingle();
   if (cancelError) throw new Error(cancelError.message);
-  if (!cancelled) return { success: true };
+  if (!cancelled) return { success: true, changed: false };
 
-  await reconcileWaitlist(reg.match_sessions as MatchSession, 'cancel');
-  return { success: true };
+  try {
+    await finalizeEffectiveCancellation(
+      () => reconcileWaitlist(reg.match_sessions as MatchSession, 'cancel'),
+      onCancelled || (async () => {})
+    );
+  } finally {
+    // 取消已生效；即使遞補失敗，也不能讓快取持續顯示舊名額。
+    invalidateSessionCache();
+  }
+  return { success: true, changed: true };
 }
 
 /** 團主擴大正取名額後，按同樣的嚴格順位規則遞補備取。 */

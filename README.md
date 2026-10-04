@@ -58,6 +58,14 @@
 
 既有 Supabase 專案需在 SQL Editor 執行 [`supabase/migrations/20260924_host_group_permissions.sql`](supabase/migrations/20260924_host_group_permissions.sql)，完成後才部署此版程式；新建專案使用更新後的 `supabase/schema.sql` 即可。遷移加入 `host_applications.group_id` 與 `host_group_permissions`，不會自動把舊有 `users.role = 'host'` 轉成任何群組授權。最高管理後台可逐筆新增、修改或刪除授權；場次建立 API 會驗證本人對所選群組的權限。
 
+### 可選團主通知：Lite / Full（同一個 repo）
+
+- **Lite（預設）**：不設定 `EMAIL_NOTIFICATIONS_ENABLED` 或設為 `false`；不需 Resend、寄件網域、Email migration。團主申請不要求 Email、報名和取消不寄 Email，也不讀取 Email 資料表；一鍵部署流程不變。
+- **Full（自行啟用）**：先執行 [`supabase/migrations/20261002_optional_host_email_notifications.sql`](supabase/migrations/20261002_optional_host_email_notifications.sql)，在 Resend 驗證寄件網域，於 Vercel 設 `EMAIL_NOTIFICATIONS_ENABLED=true`、`RESEND_API_KEY`、`EMAIL_FROM=JuJu <notify@已驗證網域>` 並重新部署。申請團主時須填 Email，既有團主也可在後台補填；**須完成信箱驗證**後才會收到球友正取／備取及取消報名通知。新表啟用 RLS，Email 與驗證碼不存於公開的 `users` 表。
+- **LINE 團主私訊獨立開關**：`HOST_LINE_NOTIFICATIONS_ENABLED=false`（預設）；若自行設為 `true`，會消耗 LINE 訊息額度。寄信不使用 LINE 額度；任何模式都不恢復 Bot 群組開團推播。
+
+郵件通知失敗不回滾報名；Full 模式的通知結果保留於 `host_notification_events` 供排查，但目前**沒有自動重試排程**。詳細部署順序見 [DEPLOYMENT_GUIDE.md](DEPLOYMENT_GUIDE.md)。
+
 ## 💡 LINE 200 則免費額度保護機制 (Zero-Quota Architecture)
 
 LINE 官方帳號免費方案（Free Plan）每個月僅提供 **200 則主動推播（Push Message）**。在群組營運時，若 Bot 主動向群組推播，**發送 1 次訊息就會乘上群內人數（例：50 人群組推播 1 次扣 50 則）**，開 4 次團就會導致整個月額度歸零！
@@ -100,7 +108,7 @@ flowchart TD
 ### 4. 🛡️ 開團流程與額度保護
 * 開團時必選場次**歸屬群組**（只列已授權群組）；建立場次絕不觸發 Bot 群組推播，後端也拒絕舊版 `notify_group_id` 推播參數及 Bot 群組補發請求。建團後使用 LIFF Share Target Picker 由團主個人帳號分享 Flex 卡片。
 * 場次季打優惠**預設關閉**；未啟用存為 `NULL`，啟用時須提供大於 0 的整數金額。
-* **保留珍貴的 200 則 Push 額度**，專門用於最核心的「有人取消時，1 對 1 私訊通知備取第一位球友已成功遞補正取」。
+* **保留珍貴的 200 則 Push 額度**給遞補與緊急私訊；可選的團主 LINE 私訊預設關閉，啟用時會檢查本月使用量並保留至少 50 則，但其他 LINE 推播仍會共用額度。
 
 ---
 
