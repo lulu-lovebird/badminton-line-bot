@@ -35,6 +35,25 @@ CREATE INDEX IF NOT EXISTS idx_host_group_permissions_group_id ON host_group_per
 ALTER TABLE host_group_permissions ENABLE ROW LEVEL SECURITY;
 REVOKE ALL ON host_group_permissions FROM anon, authenticated;
 
+-- 群組固定咖與季打優惠名冊
+CREATE TABLE IF NOT EXISTS group_memberships (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    group_id TEXT NOT NULL REFERENCES groups(group_id) ON DELETE CASCADE,
+    user_id TEXT NOT NULL REFERENCES users(line_user_id) ON DELETE CASCADE,
+    is_regular BOOLEAN NOT NULL DEFAULT TRUE,           -- 是否為固定咖 (開團預設自動帶入)
+    has_seasonal_discount BOOLEAN NOT NULL DEFAULT FALSE, -- 是否享有季打優惠
+    seasonal_fee INT CHECK (seasonal_fee > 0),          -- 個人特定季打優惠價 (NULL 則採用場次季打優惠價)
+    valid_from DATE,                                    -- 季打/固定咖生效起始日
+    valid_until DATE,                                   -- 季打/固定咖效期結束日
+    notes TEXT,                                         -- 團主備忘 (如: 已繳 2026 Q3 季費)
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW(),
+    UNIQUE(group_id, user_id)
+);
+CREATE INDEX IF NOT EXISTS idx_group_memberships_active_regulars 
+ON group_memberships(group_id) 
+WHERE is_regular = TRUE;
+
 -- 3. 零打場次資料表 (綁定 group_id)
 CREATE TABLE IF NOT EXISTS match_sessions (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -51,6 +70,7 @@ CREATE TABLE IF NOT EXISTS match_sessions (
     level_requirement TEXT,                      -- 建議程度 (如: 4~7級 / 初中級)
     shuttlecock TEXT,                            -- 用球品牌 (如: 勝利比賽球、Yonex AS-30)
     fee INT NOT NULL DEFAULT 200,                -- 費用 (每人)
+    seasonal_fee INT CHECK (seasonal_fee > 0),   -- 場次通用季打優惠價 (每人，選填)
     notes TEXT,                                  -- 備註 (冷氣、飲水、收費方式等)
     cancel_deadline TIMESTAMPTZ,                 -- 免費取消截止時間
     is_roster_public BOOLEAN NOT NULL DEFAULT TRUE, -- 是否公開已報名球友名單 (true: 公開, false: 私密僅主揪可見)
@@ -70,6 +90,9 @@ CREATE TABLE IF NOT EXISTS registrations (
     waitlist_order INT,                          -- 備取順序 (1, 2, 3...)
     payment_status TEXT NOT NULL DEFAULT 'unpaid', -- 'unpaid' (未付款-橘色) | 'paid' (已付款-綠色)
     attendance_status TEXT DEFAULT 'pending',     -- 'pending' | 'attended' (已到) | 'absent' (缺席)
+    is_regular BOOLEAN NOT NULL DEFAULT FALSE,   -- 是否為固定咖
+    is_prefilled BOOLEAN NOT NULL DEFAULT FALSE, -- 是否為開團預載名單
+    applicable_fee INT CHECK (applicable_fee >= 0), -- 實收/應收金額 (含季打折扣計算後)
     registered_at TIMESTAMPTZ DEFAULT NOW(),
     cancelled_at TIMESTAMPTZ,
     notes TEXT,
@@ -101,6 +124,10 @@ FOR EACH ROW EXECUTE FUNCTION update_timestamp();
 
 CREATE OR REPLACE TRIGGER trigger_sessions_updated_at
 BEFORE UPDATE ON match_sessions
+FOR EACH ROW EXECUTE FUNCTION update_timestamp();
+
+CREATE OR REPLACE TRIGGER trigger_group_memberships_updated_at
+BEFORE UPDATE ON group_memberships
 FOR EACH ROW EXECUTE FUNCTION update_timestamp();
 -- ============================================================
 -- 團主身分審核資料表 (Host Applications)

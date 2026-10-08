@@ -27,8 +27,27 @@
 3. 進入專案左側選單的 **SQL Editor**：
    - 點擊 **"New query"**。
    - 打開專案中的 [`supabase/schema.sql`](supabase/schema.sql)（若未下載程式碼，可[點此直接開啟原始碼複製](https://raw.githubusercontent.com/lulu-lovebird/badminton-line-bot/main/supabase/schema.sql)），**複製全部內容**並貼入 SQL Editor。
-   - 點擊右下角的 **"Run"** 執行。新專案會建置 `users`、`groups`、`host_applications`、`host_group_permissions`、`match_sessions`、`registrations` 等資料表。
-   - **升級既有專案**：先備份資料，在 SQL Editor 執行 [`supabase/migrations/20260924_host_group_permissions.sql`](supabase/migrations/20260924_host_group_permissions.sql)，再部署新版程式；不要把既有 `users.role = 'host'` 當成任何群組的授權，也不必為了升級刪掉舊使用者資料。
+   - 點擊右下角的 **"Run"** 執行。新專案會一次建置完成包含 `users`、`groups`、`host_group_permissions`、`group_memberships`、`match_sessions`、`registrations`、`host_applications` 以及通知架構等全套資料表、索引與觸發器。
+
+---
+
+### 💡 資料庫 SQL 腳本適用時機說明（全新安裝 vs 舊版升級）
+
+為了避免新舊用戶混淆，本專案 SQL 檔案分為兩種類型：
+
+1. **全新安裝（初次建立專案者）**：
+   - **只需要執行 [`supabase/schema.sql`](supabase/schema.sql)** 一次即可。
+   - `schema.sql` 永遠保持為**最新完整資料庫結構**（包含多群組權限、固定咖與季打優惠、到場人員註記、通知架構等）。
+   - **全新安裝使用者請勿重複執行 `supabase/migrations/` 裡的檔案**。
+
+2. **舊版升級（既有專案升級至新版本者）**：
+   - 僅適用於**先前已經部署舊版、資料庫已存有正式資料**的專案。為了保留既有資料不被重置，請勿直接重跑 `schema.sql`，而是依照升級跨越的版本，依序在 SQL Editor 執行 `supabase/migrations/` 下對應的增量腳本：
+     - `20260919_group_memberships.sql`：升級支援群組固定咖名單與季打優惠價。
+     - `20260924_host_group_permissions.sql`：升級支援多群組隔離與分群團主授權。
+     - `20260927_registration_attendee_name.sql`：升級支援團主註記實際到場人員稱呼。
+     - `20261002_optional_host_email_notifications.sql`：升級支援團主 Email 通知模組（若僅使用 Lite 模式則不需執行）。
+
+---
 4. 取得 Supabase 連線金鑰：
    - 點擊左下角 **Project Settings (齒輪圖示)** -> **API**。
    - 複製並記錄以下三個值：
