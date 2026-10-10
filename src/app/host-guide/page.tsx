@@ -19,12 +19,17 @@ import {
   Sparkles,
   Ban,
   Trash2,
+  Star,
+  UserPlus,
+  Share2,
+  UserCheck,
+  Mail,
 } from 'lucide-react';
 import type { Metadata } from 'next';
 
 export const metadata: Metadata = {
   title: '羽球零打小幫手 JuJu 🏸 | 團主使用手冊',
-  description: '專為羽球社團揪團主設計的完整操作手冊，包含加機器人、申請團主、開團發布、複製下週、現場對帳與自動遞補等完整教學。',
+  description: '專為羽球社團揪團主設計的完整操作手冊，包含加機器人、申請團主、固定咖管理、季打優惠、Email 報名通知、開團發布、複製下週、現場對帳與自動遞補等完整教學。',
 };
 
 export default function HostGuidePage() {
@@ -63,14 +68,14 @@ export default function HostGuidePage() {
             </h1>
             <p className="text-sm sm:text-base text-emerald-100 max-w-xl leading-relaxed">
               告別在 LINE 群組手動複製文字、+1 洗版、錯亂漏算人數與現場對帳困擾！JuJu
-              提供團主自行分享 Flex 開團卡片、正取備取排隊、自動遞補通知與現場收款標記工具。
+              提供團主固定咖預載、季打單場優惠核定、自行分享 Flex 開團卡片、正取備取排隊、自動遞補通知與現場收款標記工具。
             </p>
           </div>
           <div className="mt-6 sm:mt-0 flex flex-col items-center sm:items-end gap-2.5 shrink-0">
             <div className="bg-white/10 backdrop-blur-md border border-white/20 px-5 py-3.5 rounded-2xl text-center">
               <div className="text-emerald-200 text-xs sm:text-sm font-medium">手冊版本</div>
-              <div className="text-lg sm:text-xl font-bold mt-0.5">v1.2 (2026 最新版)</div>
-              <div className="text-xs text-emerald-300 mt-1">LINE LIFF 2.0 整合支援</div>
+              <div className="text-lg sm:text-xl font-bold mt-0.5">v1.3 (2026 最新版)</div>
+              <div className="text-xs text-emerald-300 mt-1">LINE LIFF 2.0 • 固定咖/季打 • 選用 Email 通知</div>
             </div>
           </div>
         </div>
@@ -107,44 +112,51 @@ export default function HostGuidePage() {
             </a>
             <a
               href="#step4"
-              className="p-3 rounded-2xl bg-slate-50 hover:bg-emerald-50 text-slate-700 hover:text-emerald-800 border border-slate-200/80 transition-colors font-semibold flex items-center justify-between"
+              className="p-3 rounded-2xl bg-amber-50/70 hover:bg-amber-100/70 text-amber-900 border border-amber-200 transition-colors font-semibold flex items-center justify-between"
             >
-              <span>4. 複製到下週 (+7)</span>
-              <ChevronRight size={14} className="text-slate-400 shrink-0" />
+              <span>4. 固定咖與季打管理</span>
+              <ChevronRight size={14} className="text-amber-500 shrink-0" />
             </a>
             <a
               href="#step5"
               className="p-3 rounded-2xl bg-slate-50 hover:bg-emerald-50 text-slate-700 hover:text-emerald-800 border border-slate-200/80 transition-colors font-semibold flex items-center justify-between"
             >
-              <span>5. 現場收款對帳</span>
+              <span>5. 複製到下週 (+7)</span>
               <ChevronRight size={14} className="text-slate-400 shrink-0" />
             </a>
             <a
               href="#step6"
               className="p-3 rounded-2xl bg-slate-50 hover:bg-emerald-50 text-slate-700 hover:text-emerald-800 border border-slate-200/80 transition-colors font-semibold flex items-center justify-between"
             >
-              <span>6. 手動代報名/遞補</span>
+              <span>6. 現場收款對帳</span>
               <ChevronRight size={14} className="text-slate-400 shrink-0" />
             </a>
             <a
               href="#step7"
               className="p-3 rounded-2xl bg-slate-50 hover:bg-emerald-50 text-slate-700 hover:text-emerald-800 border border-slate-200/80 transition-colors font-semibold flex items-center justify-between"
             >
-              <span>7. 分享卡片/緊急通知</span>
+              <span>7. 手動代報名/遞補</span>
               <ChevronRight size={14} className="text-slate-400 shrink-0" />
             </a>
             <a
               href="#step8"
               className="p-3 rounded-2xl bg-slate-50 hover:bg-emerald-50 text-slate-700 hover:text-emerald-800 border border-slate-200/80 transition-colors font-semibold flex items-center justify-between"
             >
-              <span>8. 場次停用與刪除</span>
+              <span>8. 分享卡片/緊急通知</span>
+              <ChevronRight size={14} className="text-slate-400 shrink-0" />
+            </a>
+            <a
+              href="#step9"
+              className="p-3 rounded-2xl bg-slate-50 hover:bg-emerald-50 text-slate-700 hover:text-emerald-800 border border-slate-200/80 transition-colors font-semibold flex items-center justify-between"
+            >
+              <span>9. 場次停用與刪除</span>
               <ChevronRight size={14} className="text-slate-400 shrink-0" />
             </a>
             <a
               href="#faq"
-              className="p-3 rounded-2xl bg-slate-50 hover:bg-emerald-50 text-slate-700 hover:text-emerald-800 border border-slate-200/80 transition-colors font-semibold flex items-center justify-between"
+              className="p-3 rounded-2xl bg-slate-50 hover:bg-emerald-50 text-slate-700 hover:text-emerald-800 border border-slate-200/80 transition-colors font-semibold flex items-center justify-between col-span-2 sm:col-span-1"
             >
-              <span>9. 常見問題 FAQ</span>
+              <span>10. 常見問題 FAQ</span>
               <ChevronRight size={14} className="text-slate-400 shrink-0" />
             </a>
           </div>
@@ -238,6 +250,26 @@ export default function HostGuidePage() {
                 </li>
               </ol>
             </div>
+
+            {/* 選用 Email 通知說明 */}
+            <div className="p-4 sm:p-5 bg-blue-50/70 rounded-2xl border border-blue-200 text-xs sm:text-sm text-blue-950 space-y-2.5">
+              <div className="font-bold flex items-center gap-2 text-blue-900 text-sm sm:text-base">
+                <Mail size={18} className="text-blue-600" />
+                <span>📧 選用功能：團主報名通知 Email 設定與驗證</span>
+              </div>
+              <p className="text-slate-700 leading-relaxed">
+                <strong>【選用功能註記】</strong>：Email 即時通知為<strong>選用模組（Optional）</strong>。系統環境需先完成 Email 服務設定（如伺服器端環境變數啟用 Resend 與寄件設定），後台才會顯示 Email 設定面板；若部署環境未開啟此設定，該區塊將自動隱藏，不會影響一般開團報名運作。
+              </p>
+              <div className="bg-white/80 p-3.5 rounded-xl border border-blue-200/80 space-y-2 text-slate-700 leading-relaxed">
+                <div className="font-bold text-slate-900 text-xs sm:text-sm">團主設定與驗證流程：</div>
+                <ol className="list-decimal pl-5 space-y-1 text-xs sm:text-sm">
+                  <li><strong>填寫信箱</strong>：申請團主時可一併填寫「團主通知 Email」，或已獲授權後在後台常駐的「📧 團主報名通知 Email」面板輸入個人信箱。</li>
+                  <li><strong>寄送驗證碼</strong>：點擊「寄送驗證碼 / 更新信箱」，系統會發送含有 24 碼驗證碼的驗證信至該信箱。</li>
+                  <li><strong>完成驗證</strong>：在後台輸入驗證碼並點擊「驗證」，通過後即標記為「<strong>✓ 已驗證 / 通知已啟用</strong>」。</li>
+                  <li><strong>即時掌握球友動態</strong>：只有<strong>完成驗證的信箱</strong>才會在球友「報名成功」或「取消報名」時，第一時間收到系統 Email 通知（藉此省下 LINE 官方帳號的共用推播額度）。</li>
+                </ol>
+              </div>
+            </div>
           </div>
         </section>
 
@@ -288,8 +320,10 @@ export default function HostGuidePage() {
               </div>
 
               <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 space-y-1.5">
-                <span className="font-bold text-slate-900 text-sm">💰 臨打費用 ($)</span>
-                <p className="text-slate-600 leading-relaxed">每人費用金額。季打優惠預設不啟用；若有季打優惠，請勾選「啟用季打優惠」並填寫大於 0 的整數金額，不提供優惠就維持關閉。</p>
+                <span className="font-bold text-slate-900 text-sm">💰 臨打費用與季打優惠 ($)</span>
+                <p className="text-slate-600 leading-relaxed">
+                  輸入每人單次臨打費用金額。若社團有季打/固定優惠制度，請勾選「<strong>啟用季打優惠</strong>」並填寫單場優惠金額（例如：臨打 $200、季打 $180）。不提供優惠則維持未勾選。
+                </p>
               </div>
 
               <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 space-y-1.5">
@@ -298,6 +332,22 @@ export default function HostGuidePage() {
                   標註使用球種（例：勝利比賽球、摩亞）及建議程度（例：初中級 4~7 級），確保比賽節奏順暢。
                 </p>
               </div>
+            </div>
+
+            {/* 預載固定咖亮點說明 */}
+            <div className="p-4 bg-amber-50/70 rounded-2xl border border-amber-200 text-xs sm:text-sm text-amber-950 space-y-2">
+              <div className="font-bold flex items-center gap-2 text-amber-900 text-sm">
+                <Star size={16} className="text-amber-600 fill-amber-500" />
+                <span>開團亮點：預載本群固定咖名冊（免每週搶票）</span>
+              </div>
+              <p className="leading-relaxed text-slate-700">
+                若您在後台已建置固定咖名冊，開團表單會自動展開「<strong>預載本群固定咖</strong>」面板，預設全選該群固定球友自動卡位正取：
+              </p>
+              <ul className="list-disc pl-5 space-y-1 text-slate-700 leading-relaxed">
+                <li><strong>自動保留正取名額</strong>：開團建立時，系統直接將勾選的固定球友列入正取，球友無須每週手動報名搶票。</li>
+                <li><strong>當週請假即時剔除</strong>：若某位固定咖已知本週請假，團主可在開團當下直接取消打勾，不佔用名額。</li>
+                <li><strong>即時換算開放零打額度</strong>：面板會動態顯示「<strong>開放零打：X 名</strong>（總正取上限 - 已預載固定咖人數）」，開團人數計算一清二楚！</li>
+              </ul>
             </div>
 
             <div className="p-4 bg-emerald-50 rounded-2xl border border-emerald-200 text-xs sm:text-sm text-emerald-950 flex items-start gap-3">
@@ -319,8 +369,122 @@ export default function HostGuidePage() {
               4
             </div>
             <div>
+              <h2 className="text-lg sm:text-2xl font-black text-slate-900">第四步：群組固定咖與季打球友管理</h2>
+              <p className="text-xs sm:text-sm text-slate-500 mt-0.5">預載正取免搶票、三大加入途徑與季打單場優惠核定</p>
+            </div>
+          </div>
+
+          <div className="space-y-5 text-sm sm:text-base text-slate-700 leading-relaxed">
+            <p>
+              羽球團常有一群每週必到的長期球友或預繳季費的「季打固定咖」。JuJu 提供了後台「<strong>👥 固定咖管理</strong>」專屬分頁，讓團主輕鬆維護名單，享受每週開團全自動帶入正取的極致便利！
+            </p>
+
+            {/* 三大建立途徑卡片 */}
+            <div className="space-y-3">
+              <div className="font-bold text-slate-900 text-sm sm:text-base flex items-center gap-2">
+                <UserPlus size={18} className="text-emerald-600" />
+                <span>三大加入固定咖途徑（團主與球友皆免手動查填 LINE ID）：</span>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3.5 text-xs sm:text-sm">
+                {/* 方案 A */}
+                <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 space-y-2 flex flex-col justify-between">
+                  <div className="space-y-1.5">
+                    <span className="font-bold text-slate-900 text-sm flex items-center gap-1.5">
+                      <span className="w-2 h-2 rounded-full bg-blue-500"></span>
+                      方案 A：歷史球友下拉快選
+                    </span>
+                    <p className="text-slate-600 leading-relaxed">
+                      在固定咖管理頁面中，系統會<strong>自動彙整該群組過往所有出席球友，並依累計出席次數排序</strong>。團主只需在下拉選單選取常客球友，一鍵即可儲存為固定咖！
+                    </p>
+                  </div>
+                  <div className="text-[11px] text-blue-700 bg-blue-50 p-2 rounded-xl font-medium">
+                    適合：社團已開過幾次團，直接挑選高頻率老球友升級為固定咖。
+                  </div>
+                </div>
+
+                {/* 方案 B */}
+                <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 space-y-2 flex flex-col justify-between">
+                  <div className="space-y-1.5">
+                    <span className="font-bold text-slate-900 text-sm flex items-center gap-1.5">
+                      <Star size={14} className="text-amber-500 fill-amber-500" />
+                      方案 B：場次名冊一鍵設為固定咖
+                    </span>
+                    <p className="text-slate-600 leading-relaxed">
+                      在任何一場進行中或已結束場次的「名冊管理頁」中，每位球友右側都有「<strong>⭐ 設為固定咖</strong>」按鈕。點擊後跳出設定彈窗，一秒將該場球友加入常客清單。
+                    </p>
+                  </div>
+                  <div className="text-[11px] text-amber-800 bg-amber-50 p-2 rounded-xl font-medium">
+                    適合：打球現場看到表現優秀或當場繳交季費的新球友，直接就地轉正！
+                  </div>
+                </div>
+
+                {/* 方案 C */}
+                <div className="p-4 bg-emerald-50/80 rounded-2xl border border-emerald-200 space-y-2 flex flex-col justify-between">
+                  <div className="space-y-1.5">
+                    <span className="font-bold text-emerald-950 text-sm flex items-center gap-1.5">
+                      <Share2 size={14} className="text-emerald-600" />
+                      方案 C：自主登記專屬邀請連結
+                    </span>
+                    <p className="text-emerald-900 leading-relaxed">
+                      在固定咖管理頂部點擊「<strong>複製專屬登記邀請連結與文案</strong>」發至 LINE 群。球友點開連結會由 LIFF 自動辨識本人 LINE 帳號一鍵加入固定咖名冊！
+                    </p>
+                  </div>
+                  <div className="text-[11px] text-emerald-800 bg-white p-2 rounded-xl font-medium border border-emerald-200">
+                    最省力：團主與球友皆免查、免填 33 碼 LINE ID，群組公告自主加入。
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* 季打單場優惠價核定機制 */}
+            <div className="p-5 bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-200 rounded-2xl text-xs sm:text-sm text-amber-950 space-y-3">
+              <div className="font-bold flex items-center gap-2 text-amber-900 text-sm sm:text-base">
+                <DollarSign size={18} className="text-amber-600" />
+                <span>季打單場優惠價與效期管理：</span>
+              </div>
+              <ul className="list-disc pl-5 space-y-1.5 text-amber-900 leading-relaxed">
+                <li>
+                  <strong>單場優惠核定</strong>：在固定咖設定表單中，勾選「<strong>啟用季打單場優惠價</strong>」，可為該球友指定專屬單場優惠金額（例如臨打 $200、季打 $160）。
+                </li>
+                <li>
+                  <strong>有效期限設定 (選填)</strong>：可填寫「季打效期至」（例如：2026-09-30）。效期內開團自動適用優惠價；效期過後系統自動回復一般原價，避免季費過期忘記更新。
+                </li>
+                <li>
+                  <strong>安全審核機制</strong>：球友透過「方案 C 專屬連結」自主登記者，<strong>預設僅具備「固定咖（正取預載）」身分，不具備季打優惠</strong>。季打優惠價必須由團主在後台親自核定開啟，杜絕未繳季費者誤享優惠。
+                </li>
+                <li>
+                  <strong>專屬備忘註記</strong>：團主可於後台備忘欄位記錄（如：「已匯款 2026 Q3 季費 1800 元」），此備忘僅團主可見，帳務更清晰。
+                </li>
+              </ul>
+            </div>
+
+            {/* 固定咖請假與自動遞補機制 */}
+            <div className="p-4 sm:p-5 bg-slate-50 rounded-2xl border border-slate-200 text-xs sm:text-sm text-slate-700 space-y-2">
+              <div className="font-bold flex items-center gap-2 text-slate-900 text-sm sm:text-base">
+                <UserCheck size={18} className="text-emerald-600" />
+                <span>固定咖臨時請假與自動釋出遞補說明：</span>
+              </div>
+              <p className="text-slate-600 leading-relaxed">
+                固定咖若某週臨時有事無法出席，只要在「<strong>📋 報名記錄</strong>」中點擊該場次的「<strong>取消報名 / 請假</strong>」：
+              </p>
+              <ul className="list-disc pl-5 space-y-1 text-slate-700 leading-relaxed">
+                <li><strong>名額瞬間釋出</strong>：系統會立即將備取名單中第 1 順位球友自動晉升為正取，並透過 LINE 私訊通知該遞補球友。</li>
+                <li><strong>固定咖資格完全不受影響</strong>：單場請假僅取消該次出席，完全不會自群組固定咖清單中移除。下週開新場次時，系統依然會自動預載！</li>
+              </ul>
+            </div>
+          </div>
+        </section>
+
+        {/* ===================== 第五章 ===================== */}
+        <section id="step5" className="bg-white rounded-3xl p-6 sm:p-10 border border-slate-200 shadow-xs space-y-5">
+          <div className="flex items-center gap-3.5 border-b border-slate-100 pb-4">
+            <div className="w-10 h-10 sm:w-11 sm:h-11 rounded-2xl bg-amber-100 text-amber-900 font-black flex items-center justify-center text-base sm:text-lg shrink-0">
+              5
+            </div>
+            <div>
               <h2 className="text-lg sm:text-2xl font-black text-slate-900">
-                第四步：快速沿用歷史場次（自動順延 +7 天）
+                第五步：快速沿用歷史場次（自動順延 +7 天）
               </h2>
               <p className="text-xs sm:text-sm text-slate-500 mt-0.5">固定每週開團神器，告別重複打字與複製貼上</p>
             </div>
@@ -356,15 +520,15 @@ export default function HostGuidePage() {
           </div>
         </section>
 
-        {/* ===================== 第五章 ===================== */}
-        <section id="step5" className="bg-white rounded-3xl p-6 sm:p-10 border border-slate-200 shadow-xs space-y-5">
+        {/* ===================== 第六章 ===================== */}
+        <section id="step6" className="bg-white rounded-3xl p-6 sm:p-10 border border-slate-200 shadow-xs space-y-5">
           <div className="flex items-center gap-3.5 border-b border-slate-100 pb-4">
             <div className="w-10 h-10 sm:w-11 sm:h-11 rounded-2xl bg-emerald-100 text-emerald-800 font-black flex items-center justify-center text-base sm:text-lg shrink-0">
-              5
+              6
             </div>
             <div>
-              <h2 className="text-lg sm:text-2xl font-black text-slate-900">第五步：現場名冊管理與收款對帳</h2>
-              <p className="text-xs sm:text-sm text-slate-500 mt-0.5">到場點名、繳費狀態標記，帳目清楚一目了然</p>
+              <h2 className="text-lg sm:text-2xl font-black text-slate-900">第六步：現場名冊管理與收款對帳</h2>
+              <p className="text-xs sm:text-sm text-slate-500 mt-0.5">到場點名、季打優惠標示與繳費狀態標記</p>
             </div>
           </div>
 
@@ -380,31 +544,31 @@ export default function HostGuidePage() {
                   正取與備取名冊分流
                 </span>
                 <p className="text-slate-600 leading-relaxed">
-                  清楚列出報名順序、球友 LINE 暱稱、報名人數（如 +1、+2）與登記時間。
+                  清楚列出報名順序、球友 LINE 暱稱、報名人數（如 +1、+2）與登記時間，並以綠色標籤識別固定咖。
                 </p>
               </div>
 
               <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 space-y-1.5">
                 <span className="font-bold text-slate-900 text-sm flex items-center gap-2">
                   <DollarSign size={16} className="text-amber-600" />
-                  現場收款標籤切換
+                  現場收款與季打優惠標籤
                 </span>
                 <p className="text-slate-600 leading-relaxed">
-                  球友到場繳交現金或轉帳後，團主只需輕點該球友右側的標籤，即可在「<strong>🟠 未付款</strong>」與「<strong>🟢 已付款</strong>」之間即時切換。
+                  具備季打資格球友會標註橘黃色「<strong>季打 $XXX</strong>」標籤，一般球友顯示臨打費用。球友到場繳費後，點擊標籤即可在「<strong>🟠 待付款</strong>」與「<strong>🟢 已付款</strong>」之間即時切換。
                 </p>
               </div>
             </div>
           </div>
         </section>
 
-        {/* ===================== 第六章 ===================== */}
-        <section id="step6" className="bg-white rounded-3xl p-6 sm:p-10 border border-slate-200 shadow-xs space-y-5">
+        {/* ===================== 第七章 ===================== */}
+        <section id="step7" className="bg-white rounded-3xl p-6 sm:p-10 border border-slate-200 shadow-xs space-y-5">
           <div className="flex items-center gap-3.5 border-b border-slate-100 pb-4">
             <div className="w-10 h-10 sm:w-11 sm:h-11 rounded-2xl bg-purple-100 text-purple-900 font-black flex items-center justify-center text-base sm:text-lg shrink-0">
-              6
+              7
             </div>
             <div>
-              <h2 className="text-lg sm:text-2xl font-black text-slate-900">第六步：手動代報名與全自動遞補通知</h2>
+              <h2 className="text-lg sm:text-2xl font-black text-slate-900">第七步：手動代報名與全自動遞補通知</h2>
               <p className="text-xs sm:text-sm text-slate-500 mt-0.5">彈性代報名機制與無人值守的備取遞補</p>
             </div>
           </div>
@@ -426,24 +590,24 @@ export default function HostGuidePage() {
                 <span>JuJu 核心功能：無人值守「全自動遞補」</span>
               </div>
               <p className="leading-relaxed">
-                當已報名的正取球友因故自行取消，或由團主在後台點擊「取消報名」時：
+                當已報名的正取球友（含預載之固定咖）因故自行取消，或由團主在後台點擊「取消報名」時：
               </p>
               <ul className="list-disc pl-6 space-y-1.5 text-purple-900 leading-relaxed">
-                <li>系統會<strong>自動將「備取順位第 1 位」球友自動晉升為「正取名額」</strong>。</li>
+                <li>系統會<strong>自動將「備取順位第 1 位」球友晉升為「正取名額」</strong>。</li>
                 <li>JuJu 機器人會<strong>立即透過 LINE 一對一私訊通知該備取球友</strong>：「恭喜您已成功遞補為正取名單！」，團主完全無須手動聯繫找人！</li>
               </ul>
             </div>
           </div>
         </section>
 
-        {/* ===================== 第七章 ===================== */}
-        <section id="step7" className="bg-white rounded-3xl p-6 sm:p-10 border border-slate-200 shadow-xs space-y-5">
+        {/* ===================== 第八章 ===================== */}
+        <section id="step8" className="bg-white rounded-3xl p-6 sm:p-10 border border-slate-200 shadow-xs space-y-5">
           <div className="flex items-center gap-3.5 border-b border-slate-100 pb-4">
             <div className="w-10 h-10 sm:w-11 sm:h-11 rounded-2xl bg-sky-100 text-sky-900 font-black flex items-center justify-center text-base sm:text-lg shrink-0">
-              7
+              8
             </div>
             <div>
-              <h2 className="text-lg sm:text-2xl font-black text-slate-900">第七步：團主分享卡片與球友緊急通知</h2>
+              <h2 className="text-lg sm:text-2xl font-black text-slate-900">第八步：團主分享卡片與球友緊急通知</h2>
               <p className="text-xs sm:text-sm text-slate-500 mt-0.5">隨時置頂卡片與突發狀況即時廣播</p>
             </div>
           </div>
@@ -469,18 +633,28 @@ export default function HostGuidePage() {
                   若遇場地臨時更換（如換到 4 號場地）、停打或颱風天取消，在詳細頁輸入說明文字並點擊「<strong>推播</strong>」，JuJu 會<strong>一對一私訊給該場次的所有正取與備取球友</strong>，保證重要訊息不漏接！
                 </p>
               </div>
+
+              <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 space-y-2 sm:col-span-2">
+                <strong className="text-slate-900 text-sm flex items-center gap-1.5">
+                  <Mail size={15} className="text-blue-600" />
+                  球友報名與取消即時 Email 通知（選用）
+                </strong>
+                <p className="text-slate-600 leading-relaxed">
+                  為避免消耗 LINE 官方帳號每月的免費主動推播額度，JuJu 預設不會向團主發送 LINE 私訊。若系統管理員有配置並啟用 Email 通知服務，團主在完成信箱驗證後，每當有球友報名或臨時取消，系統會即時寄送通知信至團主信箱，球友名單異動即時掌握！
+                </p>
+              </div>
             </div>
           </div>
         </section>
 
-        {/* ===================== 第八章：場次維護 ===================== */}
-        <section id="step8" className="bg-white rounded-3xl p-6 sm:p-10 border border-slate-200 shadow-xs space-y-5">
+        {/* ===================== 第九章：場次維護 ===================== */}
+        <section id="step9" className="bg-white rounded-3xl p-6 sm:p-10 border border-slate-200 shadow-xs space-y-5">
           <div className="flex items-center gap-3.5 border-b border-slate-100 pb-4">
             <div className="w-10 h-10 sm:w-11 sm:h-11 rounded-2xl bg-rose-100 text-rose-900 font-black flex items-center justify-center text-base sm:text-lg shrink-0">
-              8
+              9
             </div>
             <div>
-              <h2 className="text-lg sm:text-2xl font-black text-slate-900">第八步：場次維護（停用、重新啟用與永久刪除）</h2>
+              <h2 className="text-lg sm:text-2xl font-black text-slate-900">第九步：場次維護（停用、重新啟用與永久刪除）</h2>
               <p className="text-xs sm:text-sm text-slate-500 mt-0.5">彈性應對突發變卦、清理測試資料與釋出雲端資源</p>
             </div>
           </div>
@@ -541,7 +715,7 @@ export default function HostGuidePage() {
           </div>
         </section>
 
-        {/* ===================== 第九章：常見問題 ===================== */}
+        {/* ===================== 第十章：常見問題 ===================== */}
         <section id="faq" className="bg-white rounded-3xl p-6 sm:p-10 border border-slate-200 shadow-xs space-y-5">
           <div className="flex items-center gap-3.5 border-b border-slate-100 pb-4">
             <div className="w-10 h-10 sm:w-11 sm:h-11 rounded-2xl bg-slate-100 text-slate-800 font-black flex items-center justify-center text-base sm:text-lg shrink-0">
@@ -585,7 +759,7 @@ export default function HostGuidePage() {
             <div className="p-4 sm:p-5 bg-slate-50 rounded-2xl border border-slate-200 space-y-1.5">
               <div className="font-bold text-slate-900 text-sm sm:text-base">Q5：如果某週臨時停打，我該選擇「停用場次」還是「刪除場次」？</div>
               <p className="text-slate-600 text-xs sm:text-sm leading-relaxed">
-                強烈建議選擇「<strong>停用場次</strong>」！先透過第七步的「緊急通知」發送私訊告知已報名的球友停打說明，接著在場次詳情頁點選「停用場次」。這樣既有的報名名冊能完整留存供日後查詢對帳，同時球友端亦無法再新增報名。唯有在該場次為「測試開團」或「徹底建立錯誤」時，才建議使用「刪除場次」。
+                強烈建議選擇「<strong>停用場次</strong>」！先透過第八步的「緊急通知」發送私訊告知已報名的球友停打說明，接著在場次詳情頁點選「停用場次」。這樣既有的報名名冊能完整留存供日後查詢對帳，同時球友端亦無法再新增報名。唯有在該場次為「測試開團」或「徹底建立錯誤」時，才建議使用「刪除場次」。
               </p>
             </div>
 
@@ -593,6 +767,36 @@ export default function HostGuidePage() {
               <div className="font-bold text-slate-900 text-sm sm:text-base">Q6：點擊「刪除場次」後，球友的報名資料還能救回嗎？</div>
               <p className="text-slate-600 text-xs sm:text-sm leading-relaxed">
                 無法復原！「刪除場次」屬於資料庫的物理級聯清除（Hard Delete），會連同該場次的所有報名記錄、候補順位與收款註記徹底抹除。因此點擊時系統會跳出確認警告彈窗，請確認確實無需保留後再執行。
+              </p>
+            </div>
+
+            <div className="p-4 sm:p-5 bg-amber-50/70 rounded-2xl border border-amber-200 space-y-1.5">
+              <div className="font-bold text-amber-950 text-sm sm:text-base flex items-center gap-1.5">
+                <Star size={16} className="text-amber-600 fill-amber-500" />
+                <span>Q7：社團每週都有固定的常客班底（固定咖），如何避免他們每週重複搶票？</span>
+              </div>
+              <p className="text-slate-700 text-xs sm:text-sm leading-relaxed">
+                在團主後台頂部切換至「<strong>👥 固定咖管理</strong>」，透過「歷史球友快選」、「場次名單 ⭐ 一鍵加入」或將「自主登記專屬連結」發到群組。名單建置完成後，每次開新場次時系統會自動在「預載本群固定咖」勾選他們，開團建立瞬間自動列入正取，球友再也不需要每週準時搶票！
+              </p>
+            </div>
+
+            <div className="p-4 sm:p-5 bg-emerald-50/70 rounded-2xl border border-emerald-200 space-y-1.5">
+              <div className="font-bold text-emerald-950 text-sm sm:text-base flex items-center gap-1.5">
+                <DollarSign size={16} className="text-emerald-600" />
+                <span>Q8：季打優惠價是如何運作的？球友點專屬連結自主登記後會自動享有優惠嗎？</span>
+              </div>
+              <p className="text-slate-700 text-xs sm:text-sm leading-relaxed">
+                開團時若勾選「啟用季打優惠」並設定單場優惠價，該場次即支援季打定價。為確保社團財務安全，球友點擊專屬連結登記後<strong>僅享有「固定咖正取保留」資格，預設不包含季打優惠</strong>。團主確認收到季費後，需至後台固定咖名冊中為該球友勾選「啟用季打單場優惠價」並填寫優惠金額與效期，之後該球友預載或報名才會自動以季打優惠金額計算。
+              </p>
+            </div>
+
+            <div className="p-4 sm:p-5 bg-blue-50/70 rounded-2xl border border-blue-200 space-y-1.5">
+              <div className="font-bold text-blue-950 text-sm sm:text-base flex items-center gap-1.5">
+                <Mail size={16} className="text-blue-600" />
+                <span>Q9：球友報名或取消時，團主會收到通知嗎？如何開啟 Email 報名通知？</span>
+              </div>
+              <p className="text-slate-700 text-xs sm:text-sm leading-relaxed">
+                為節省 LINE 官方帳號每月的共用主動推播額度，JuJu 機器人預設不對團主發送 LINE 私訊。系統內建<strong>選用（Optional）的 Email 通知功能</strong>：前提是系統部署環境中已完成 Email 通知服務設定。在此前提下，團主只需在團主後台的「📧 團主報名通知 Email」面板填寫個人信箱並收取 24 碼驗證碼完成驗證，之後該場次的每一次球友報名與取消，就會即時、免費寄送通知信到團主信箱！
               </p>
             </div>
           </div>
