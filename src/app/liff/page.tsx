@@ -18,10 +18,12 @@ function LiffHubContent() {
     document.title = '羽球零打小幫手 JuJu 🏸';
     const action = searchParams?.get('action');
     const sessionId = searchParams?.get('sessionId');
+    const token = searchParams?.get('token');
     if (action === 'register' || sessionId) {
       const q = new URLSearchParams();
       if (sessionId) q.set('sessionId', sessionId);
       if (groupId) q.set('groupId', groupId);
+      if (token) q.set('token', token);
       router.replace(`/liff/sessions?${q.toString()}`);
     }
   }, [searchParams, groupId, router]);
