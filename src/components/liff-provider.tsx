@@ -63,7 +63,7 @@ export function LiffProvider({ children }: { children: React.ReactNode }) {
         if (loggedIn) {
           try {
             const profile = await liffObj.getProfile();
-            const token = liffObj.getIDToken() || '';
+            const token = liffObj.getIDToken() || liffObj.getAccessToken() || '';
             if (isMounted) {
               setUserProfile({
                 userId: profile.userId,

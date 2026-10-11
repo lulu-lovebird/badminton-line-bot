@@ -100,23 +100,23 @@ function SessionListContent() {
     }
   }
 
-  // 等 LIFF 初始化完成、ID Token 就緒後再載入，避免匿名請求被群組隔離拒絕。
+  // 等 LIFF 初始化完成、登入身分就緒後再載入，避免匿名請求被群組隔離拒絕。
   const hasFetchedRef = useRef(false);
   useEffect(() => {
     document.title = '🏸 我要報名零打';
     if (!isReady || hasFetchedRef.current) return;
-    if (isLoggedIn && !idToken) {
+    if (isLoggedIn && !idToken && !userProfile?.userId) {
       setLoading(false);
       setMessage({ type: 'error', text: '無法取得 LINE 登入憑證，請從 LINE 重新開啟頁面' });
       return;
     }
     hasFetchedRef.current = true;
     fetchSessions();
-  }, [isReady, isLoggedIn, idToken]);
+  }, [isReady, isLoggedIn, idToken, userProfile?.userId]);
 
   // 從私訊 / 圖文選單進入且無 groupId 時，載入球友本人實際所屬的啟用群組
   useEffect(() => {
-    if (!isReady || (isLoggedIn && !idToken) || currentGroupId || isCrossGroupAllowed) return;
+    if (!isReady || (isLoggedIn && !idToken && !userProfile?.userId) || currentGroupId || isCrossGroupAllowed) return;
     let cancelled = false;
     (async () => {
       const headers: Record<string, string> = {};
