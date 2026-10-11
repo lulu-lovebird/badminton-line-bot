@@ -11,11 +11,12 @@ export async function GET(req: NextRequest) {
     const caller = await getAuthenticatedUserId(req);
     if (!caller) return NextResponse.json({ error: '請先登入' }, { status: 401 });
 
-    // 我所屬的球隊：以 LINE 官方 API 逐一驗證目前使用者實際所在的啟用群組，
+    // 我所屬的球隊：以 LINE 官方 API 逐一驗證目前使用者實際所在的啟用群組（排除 OpenChat 社群），
     // 只回 group_id 與 group_name，不洩漏該群任何場次資料。
     if (req.nextUrl.searchParams.get('mine') === 'true') {
       const { data: activeGroups, error } = await supabaseAdmin.from('groups')
-        .select('group_id, group_name').eq('is_active', true)
+        .select('group_id, group_name, group_type').eq('is_active', true)
+        .neq('group_type', 'openchat')
         .order('created_at', { ascending: true });
       if (error) throw new Error(error.message);
       const myGroups = [];
@@ -31,7 +32,8 @@ export async function GET(req: NextRequest) {
 
     if (req.nextUrl.searchParams.get('forApplication') === 'true') {
       const { data, error } = await supabaseAdmin.from('groups')
-        .select('group_id, group_name, is_active').eq('is_active', true)
+        .select('group_id, group_name, is_active, group_type').eq('is_active', true)
+        .neq('group_type', 'openchat')
         .order('created_at', { ascending: true });
       if (error) throw new Error(error.message);
       return NextResponse.json(data || []);
@@ -44,13 +46,13 @@ export async function GET(req: NextRequest) {
       const ids = (permissions || []).map((p) => p.group_id);
       if (!ids.length) return NextResponse.json([]);
       const { data, error: groupError } = await supabaseAdmin.from('groups')
-        .select('group_id, group_name, is_active').eq('is_active', true)
+        .select('group_id, group_name, is_active, group_type, join_token').eq('is_active', true)
         .in('group_id', ids).order('created_at', { ascending: true });
       if (groupError) throw new Error(groupError.message);
       return NextResponse.json(data || []);
     }
     const { data, error } = await supabaseAdmin.from('groups')
-      .select('group_id, group_name, is_active').eq('is_active', true)
+      .select('group_id, group_name, is_active, group_type, join_token').eq('is_active', true)
       .order('created_at', { ascending: true });
     if (error) throw new Error(error.message);
     return NextResponse.json(data || []);

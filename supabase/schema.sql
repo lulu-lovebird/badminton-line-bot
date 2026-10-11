@@ -13,12 +13,14 @@ CREATE TABLE IF NOT EXISTS users (
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- 2. 群組資料表 (多群組支援)
+-- 2. 群組資料表 (多群組與 LINE 社群支援)
 CREATE TABLE IF NOT EXISTS groups (
-    group_id TEXT PRIMARY KEY,                   -- LINE Group ID (以 c 開頭的字串)
-    group_name TEXT,                             -- 群組名稱 (例: 秀朗週六歡樂羽球團)
+    group_id TEXT PRIMARY KEY,                   -- LINE Group ID (以 c 開頭) 或 OpenChat ID (以 openchat_ 開頭)
+    group_name TEXT,                             -- 群組/社群名稱 (例: 秀朗週六歡樂羽球團)
     creator_user_id TEXT REFERENCES users(line_user_id) ON DELETE SET NULL,
     is_active BOOLEAN DEFAULT TRUE,
+    group_type TEXT NOT NULL DEFAULT 'group' CHECK (group_type IN ('group', 'openchat')),
+    join_token TEXT,                             -- LINE 社群專屬驗證 Token 憑證 (一般群組為 NULL)
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );

@@ -33,11 +33,15 @@ export interface User {
   updated_at: string;
 }
 
+export type GroupType = 'group' | 'openchat';
+
 export interface Group {
   group_id: string;
   group_name?: string;
   creator_user_id?: string;
   is_active: boolean;
+  group_type?: GroupType;
+  join_token?: string | null;
   created_at: string;
   updated_at: string;
 }

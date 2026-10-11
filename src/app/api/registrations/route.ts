@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 import { cancelRegistrationAndPromote } from '@/lib/registration-service';
 import { verifyLineIdToken, isSuperAdmin } from '@/lib/auth';
-import { isUserInGroup } from '@/lib/line-group-auth';
+import { isUserInGroup, checkGroupAccess } from '@/lib/line-group-auth';
 import { hasHostGroupPermission, isGlobalAdmin } from '@/lib/host-permissions';
 import { lineClient } from '@/lib/line';
 import { invalidateSessionCache } from '@/lib/session-cache';
@@ -49,6 +49,7 @@ export async function GET(req: NextRequest) {
 
   // 1. 查詢特定場次名單
   if (sessionId) {
+    const token = searchParams.get('token');
     // 查詢該場次資訊 (含 host_user_id, group_id, is_roster_public)
     const { data: session } = await supabaseAdmin
       .from('match_sessions')
@@ -76,9 +77,13 @@ export async function GET(req: NextRequest) {
       if (!caller) {
         return NextResponse.json({ error: '請先登入以驗證群組成員身分' }, { status: 401 });
       }
-      const isMember = await isUserInGroup(session.group_id, caller.userId);
-      if (!isMember) {
-        return NextResponse.json({ error: '非該群組成員，無法查看名單' }, { status: 403 });
+      const access = await checkGroupAccess({
+        groupId: session.group_id,
+        userId: caller.userId,
+        token,
+      });
+      if (!access.allowed) {
+        return NextResponse.json({ error: access.reason || '非該群組成員，無法查看名單' }, { status: 403 });
       }
     }
 
@@ -291,12 +296,18 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: '此場次已超過開始時間，已截止報名！' }, { status: 400 });
     }
 
-    // 🛡️ 核心防護：若本場次有綁定群組，且報名者不是團主代報名，必須驗證是否為該群組成員
+    // 🛡️ 核心防護：若本場次有綁定群組，且報名者不是團主代報名，必須驗證是否為該群組/社群成員
     if (session.group_id && !targetUserId.startsWith('proxy_')) {
-      const inGroup = await isUserInGroup(session.group_id, targetUserId);
-      if (!inGroup) {
+      const urlToken = new URL(req.url).searchParams.get('token');
+      const token = body.token || urlToken;
+      const access = await checkGroupAccess({
+        groupId: session.group_id,
+        userId: targetUserId,
+        token,
+      });
+      if (!access.allowed) {
         return NextResponse.json(
-          { error: '您尚未加入此羽球社團群組，無法報名該場次！' },
+          { error: access.reason || '您尚未加入此羽球社團群組，無法報名該場次！' },
           { status: 403 }
         );
       }

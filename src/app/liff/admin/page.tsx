@@ -161,7 +161,9 @@ function AdminDashboardContent() {
   // 緊急廣播與群組推播狀態
   const [broadcastMsg, setBroadcastMsg] = useState('');
   const [isBroadcasting, setIsBroadcasting] = useState(false);
-  const [availableGroups, setAvailableGroups] = useState<{ group_id: string; group_name: string }[]>([]);
+  const [availableGroups, setAvailableGroups] = useState<
+    { group_id: string; group_name: string; group_type?: 'group' | 'openchat'; join_token?: string | null }[]
+  >([]);
   const [applicationGroups, setApplicationGroups] = useState<{ group_id: string; group_name: string }[]>([]);
 
   // 代報名表單狀態
@@ -1368,7 +1370,7 @@ function AdminDashboardContent() {
                 <>
                   {availableGroups.map((g) => (
                     <option key={g.group_id} value={g.group_id}>
-                      🏸 {g.group_name || '羽球社團群組'}
+                      {g.group_type === 'openchat' ? '👥 [社群] ' : '🏸 '} {g.group_name || '羽球社團群組'}
                     </option>
                   ))}
                   <option value="">請選擇已授權群組</option>
@@ -1816,7 +1818,7 @@ function AdminDashboardContent() {
                 {availableGroups.length > 0 ? (
                   availableGroups.map((g) => (
                     <option key={g.group_id} value={g.group_id}>
-                      🏸 {g.group_name || '羽球社團群組'}
+                      {g.group_type === 'openchat' ? '👥 [社群] ' : '🏸 '} {g.group_name || '羽球社團群組'}
                     </option>
                   ))
                 ) : (
@@ -3054,85 +3056,110 @@ function AdminDashboardContent() {
             )}
 
             {/* 3 大核心動作按鈕 */}
-            <div className="space-y-2 pt-1">
-              {/* 按鈕 1: 原生 LINE 卡片分享 */}
-              <button
-                type="button"
-                disabled={isSharingTarget}
-                onClick={async () => {
-                  setIsSharingTarget(true);
-                  const result = await shareSessionViaTargetPicker(liffInstance, shareModalSession);
-                  setIsSharingTarget(false);
-                  if (result.ok) {
-                    setCopyToast('🎉 卡片已送至群組！(0 Bot 額度消耗)');
-                    setTimeout(() => {
-                      setShareModalSession(null);
-                      setActiveTab('sessions');
-                    }, 2000);
-                  } else if (result.message && !result.message.includes('取消')) {
-                    alert(result.message);
-                  }
-                }}
-                className="w-full py-3 px-4 bg-emerald-600 hover:bg-emerald-700 active:scale-98 text-white font-bold rounded-2xl shadow-md flex items-center justify-between transition-all"
-              >
-                <div className="flex items-center gap-2.5 text-left">
-                  <div className="w-8 h-8 rounded-xl bg-white/20 flex items-center justify-center text-lg shrink-0">
-                    📲
-                  </div>
-                  <div>
-                    <div className="text-xs font-bold">分享 Flex 報名卡片</div>
-                    <div className="text-[10px] text-emerald-100">原生互動卡片 • 0 額度消耗</div>
-                  </div>
-                </div>
-                <span className="text-xs bg-white/20 px-2 py-0.5 rounded-md shrink-0">
-                  {isSharingTarget ? '開啟中...' : '傳送 →'}
-                </span>
-              </button>
+            {(() => {
+              const currentGroup = availableGroups.find((g) => g.group_id === shareModalSession.group_id);
+              const isOpenChat = currentGroup?.group_type === 'openchat';
+              const joinToken = currentGroup?.join_token || null;
 
-              {/* 按鈕 2: 複製報名連結 */}
-              <button
-                type="button"
-                onClick={() => {
-                  const url = getSessionLiffUrl(shareModalSession);
-                  navigator.clipboard.writeText(url);
-                  setCopyToast('✓ 已複製報名連結！可直接貼在 LINE 群組');
-                }}
-                className="w-full py-2.5 px-4 bg-white hover:bg-slate-50 active:scale-98 text-slate-700 font-bold rounded-2xl border border-slate-200 shadow-sm flex items-center justify-between transition-all"
-              >
-                <div className="flex items-center gap-2.5 text-left">
-                  <div className="w-8 h-8 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center shrink-0">
-                    <Copy size={16} />
-                  </div>
-                  <div>
-                    <div className="text-xs font-bold">複製報名連結 (URL)</div>
-                    <div className="text-[10px] text-slate-400">貼入群組會自帶網頁卡片預覽</div>
-                  </div>
-                </div>
-                <span className="text-xs text-blue-600 font-bold bg-blue-50 px-2 py-0.5 rounded-md shrink-0">複製</span>
-              </button>
+              return (
+                <div className="space-y-2 pt-1">
+                  {isOpenChat && (
+                    <div className="p-3 bg-amber-50 border border-amber-200 rounded-2xl text-xs space-y-1">
+                      <div className="font-bold text-amber-900 flex items-center gap-1.5">
+                        <span>👥 本場次歸屬為 LINE 社群 (OpenChat)</span>
+                      </div>
+                      <p className="text-[11px] text-amber-800 leading-relaxed">
+                        LINE 官方不支援將卡片直接分享至社群。請使用下方「複製報名連結」或「複製揪團文案」貼至社群，並設為置頂公告！
+                      </p>
+                    </div>
+                  )}
 
-              {/* 按鈕 3: 複製開團文案 */}
-              <button
-                type="button"
-                onClick={() => {
-                  const text = formatSessionAnnouncement(shareModalSession);
-                  navigator.clipboard.writeText(text);
-                  setCopyToast('✓ 已複製完整揪團文案！至群組長按貼上即可');
-                }}
-                className="w-full py-2.5 px-4 bg-white hover:bg-slate-50 active:scale-98 text-slate-700 font-bold rounded-2xl border border-slate-200 shadow-sm flex items-center justify-between transition-all"
-              >
-                <div className="flex items-center gap-2.5 text-left">
-                  <div className="w-8 h-8 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center shrink-0">
-                    <FileText size={16} />
-                  </div>
-                  <div>
-                    <div className="text-xs font-bold">複製完整揪團排版文案</div>
-                    <div className="text-[10px] text-slate-400">時間、地點、費用與報名連結全包</div>
-                  </div>
+                  {/* 按鈕 1: 原生 LINE 卡片分享 */}
+                  {!isOpenChat && (
+                    <button
+                      type="button"
+                      disabled={isSharingTarget}
+                      onClick={async () => {
+                        setIsSharingTarget(true);
+                        const result = await shareSessionViaTargetPicker(liffInstance, shareModalSession);
+                        setIsSharingTarget(false);
+                        if (result.ok) {
+                          setCopyToast('🎉 卡片已送至群組！(0 Bot 額度消耗)');
+                          setTimeout(() => {
+                            setShareModalSession(null);
+                            setActiveTab('sessions');
+                          }, 2000);
+                        } else if (result.message && !result.message.includes('取消')) {
+                          alert(result.message);
+                        }
+                      }}
+                      className="w-full py-3 px-4 bg-emerald-600 hover:bg-emerald-700 active:scale-98 text-white font-bold rounded-2xl shadow-md flex items-center justify-between transition-all"
+                    >
+                      <div className="flex items-center gap-2.5 text-left">
+                        <div className="w-8 h-8 rounded-xl bg-white/20 flex items-center justify-center text-lg shrink-0">
+                          📲
+                        </div>
+                        <div>
+                          <div className="text-xs font-bold">分享 Flex 報名卡片</div>
+                          <div className="text-[10px] text-emerald-100">原生互動卡片 • 0 額度消耗</div>
+                        </div>
+                      </div>
+                      <span className="text-xs bg-white/20 px-2 py-0.5 rounded-md shrink-0">
+                        {isSharingTarget ? '開啟中...' : '傳送 →'}
+                      </span>
+                    </button>
+                  )}
+
+                  {/* 按鈕 2: 複製報名連結 */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const url = getSessionLiffUrl(shareModalSession, undefined, joinToken);
+                      navigator.clipboard.writeText(url);
+                      setCopyToast(isOpenChat ? '✓ 已複製社群專屬報名連結（含 Token）！' : '✓ 已複製報名連結！可直接貼在 LINE 群組');
+                    }}
+                    className={`w-full py-2.5 px-4 bg-white hover:bg-slate-50 active:scale-98 text-slate-700 font-bold rounded-2xl border ${
+                      isOpenChat ? 'border-emerald-300 ring-2 ring-emerald-100' : 'border-slate-200'
+                    } shadow-sm flex items-center justify-between transition-all`}
+                  >
+                    <div className="flex items-center gap-2.5 text-left">
+                      <div className="w-8 h-8 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center shrink-0">
+                        <Copy size={16} />
+                      </div>
+                      <div>
+                        <div className="text-xs font-bold">複製報名連結 (URL)</div>
+                        <div className="text-[10px] text-slate-400">
+                          {isOpenChat ? '已自動夾帶通行憑證 Token' : '貼入群組會自帶網頁卡片預覽'}
+                        </div>
+                      </div>
+                    </div>
+                    <span className="text-xs text-blue-600 font-bold bg-blue-50 px-2 py-0.5 rounded-md shrink-0">複製</span>
+                  </button>
+
+                  {/* 按鈕 3: 複製開團文案 */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const text = formatSessionAnnouncement(shareModalSession, undefined, joinToken);
+                      navigator.clipboard.writeText(text);
+                      setCopyToast('✓ 已複製完整揪團文案！至社群/群組長按貼上即可');
+                    }}
+                    className="w-full py-2.5 px-4 bg-white hover:bg-slate-50 active:scale-98 text-slate-700 font-bold rounded-2xl border border-slate-200 shadow-sm flex items-center justify-between transition-all"
+                  >
+                    <div className="flex items-center gap-2.5 text-left">
+                      <div className="w-8 h-8 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center shrink-0">
+                        <FileText size={16} />
+                      </div>
+                      <div>
+                        <div className="text-xs font-bold">複製完整揪團排版文案</div>
+                        <div className="text-[10px] text-slate-400">時間、地點、費用與報名連結全包</div>
+                      </div>
+                    </div>
+                    <span className="text-xs text-amber-600 font-bold bg-amber-50 px-2 py-0.5 rounded-md shrink-0">複製</span>
+                  </button>
                 </div>
-                <span className="text-xs text-amber-600 font-bold bg-amber-50 px-2 py-0.5 rounded-md shrink-0">複製</span>
-              </button>
-            </div>
+              );
+            })()}
 
             <button
               type="button"

@@ -19,6 +19,7 @@ interface RosterItem {
 function SessionListContent() {
   const searchParams = useSearchParams();
   const targetSessionId = searchParams.get('sessionId') || '';
+  const tokenParam = searchParams.get('token') || '';
   const [currentGroupId, setCurrentGroupId] = useState<string>(searchParams.get('groupId') || '');
 
   const [sessions, setSessions] = useState<MatchSession[]>([]);
@@ -59,6 +60,7 @@ function SessionListContent() {
       const params = new URLSearchParams();
       params.append('upcomingOnly', 'true');
       if (targetSessionId) params.append('sessionId', targetSessionId);
+      if (tokenParam) params.append('token', tokenParam);
       if (groupFilter) params.append('groupId', groupFilter);
       if (dateFilter) params.append('date', dateFilter);
       if (isManualRefresh) {
@@ -143,7 +145,8 @@ function SessionListContent() {
       if (idToken) headers['Authorization'] = `Bearer ${idToken}`;
       else if (userProfile?.userId) headers['x-test-user-id'] = userProfile.userId;
 
-      const res = await fetch(`/api/registrations?sessionId=${sessionId}`, {
+      const tokenQuery = tokenParam ? `&token=${encodeURIComponent(tokenParam)}` : '';
+      const res = await fetch(`/api/registrations?sessionId=${sessionId}${tokenQuery}`, {
         headers,
         cache: 'no-store',
       });
@@ -201,6 +204,7 @@ function SessionListContent() {
           session_id: session.id,
           player_name: userProfile.displayName,
           party_size: partySize,
+          token: tokenParam || undefined,
         }),
       });
 
@@ -209,15 +213,16 @@ function SessionListContent() {
         throw new Error(data.error || '報名失敗');
       }
 
+      const openChatReminder = tokenParam ? '（💡 提醒：若尚未將小幫手加為好友，請加好友以接收即時遞補與異動通知）' : '';
       if (data.status === 'waitlist') {
         setMessage({
           type: 'success',
-          text: `正取已滿，您已排入【備取順位第 ${data.waitlist_order} 位】！`,
+          text: `正取已滿，您已排入【備取順位第 ${data.waitlist_order} 位】！${openChatReminder}`,
         });
       } else {
         setMessage({
           type: 'success',
-          text: '🎉 恭喜！報名成功（正取名額）！',
+          text: `🎉 恭喜！報名成功（正取名額）！${openChatReminder}`,
         });
       }
 

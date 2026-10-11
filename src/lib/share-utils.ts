@@ -26,15 +26,17 @@ export function formatTaipeiDate(dateString: string) {
 }
 
 /**
- * 取得報名頁面專屬 LIFF 連結 (若場次有 group_id 則一併帶入，確保群組專屬場次在嚴格隔離下依然能正確載入)
+ * 取得報名頁面專屬 LIFF 連結 (若場次有 group_id 則一併帶入，若有 token 則一併帶入，確保社團與社群在嚴格隔離下依然能正確載入)
  */
-export function getSessionLiffUrl(sessionOrId: string | MatchSession, liffBaseUrl?: string): string {
+export function getSessionLiffUrl(sessionOrId: string | MatchSession, liffBaseUrl?: string, explicitToken?: string | null): string {
   const base = liffBaseUrl || process.env.LINE_LIFF_URL || process.env.NEXT_PUBLIC_LIFF_URL || 'https://liff.line.me/2011571193-7TCyhgGU';
   const cleanBase = base.replace(/\/$/, '');
   const sessionId = typeof sessionOrId === 'string' ? sessionOrId : sessionOrId.id;
   const groupId = typeof sessionOrId === 'object' && sessionOrId.group_id ? sessionOrId.group_id : null;
+  const token = explicitToken || (typeof sessionOrId === 'object' ? (sessionOrId as { join_token?: string | null }).join_token : null);
   const groupParam = groupId ? `&groupId=${encodeURIComponent(groupId)}` : '';
-  return `${cleanBase}/sessions?sessionId=${sessionId}${groupParam}`;
+  const tokenParam = token ? `&token=${encodeURIComponent(token)}` : '';
+  return `${cleanBase}/sessions?sessionId=${sessionId}${groupParam}${tokenParam}`;
 }
 
 /**
@@ -49,14 +51,14 @@ export function getRegularInviteLiffUrl(groupId: string, groupName?: string, lif
 }
 
 /**
- * 產生開團排版文案（供團主一鍵複製至 LINE 群組）
+ * 產生開團排版文案（供團主一鍵複製至 LINE 群組或社群）
  */
-export function formatSessionAnnouncement(session: MatchSession, liffBaseUrl?: string): string {
+export function formatSessionAnnouncement(session: MatchSession, liffBaseUrl?: string, token?: string | null): string {
   const s = formatTaipeiDate(session.start_time);
   const e = formatTaipeiDate(session.end_time);
   const timeStr = `${s.month}/${s.day} (${s.weekday}) ${s.hours}:${s.mins} - ${e.hours}:${e.mins}`;
   const matchTypeStr = session.match_type === 'single' ? '單打' : session.match_type === 'any' ? '不限' : '雙打';
-  const registerUrl = getSessionLiffUrl(session, liffBaseUrl);
+  const registerUrl = getSessionLiffUrl(session, liffBaseUrl, token);
 
   const lines = [
     `🏸 【${matchTypeStr}零打】${session.title}`,

@@ -15,6 +15,11 @@ function SuperAdminContent() {
   const [permissionUserId, setPermissionUserId] = useState('');
   const [permissionGroupId, setPermissionGroupId] = useState('');
   const [editingPermissionId, setEditingPermissionId] = useState<string | null>(null);
+
+  // LINE 社群 (OpenChat) 建立表單狀態
+  const [newOpenChatId, setNewOpenChatId] = useState('');
+  const [newOpenChatName, setNewOpenChatName] = useState('');
+  const [isCreatingOpenChat, setIsCreatingOpenChat] = useState(false);
   const [pendingCount, setPendingCount] = useState<number>(0);
   const [appFilter, setAppFilter] = useState<'all' | 'pending' | 'reviewed'>('pending');
   const [loading, setLoading] = useState(true);
@@ -240,6 +245,61 @@ function SuperAdminContent() {
       }
     } catch (e) {
       console.error(e);
+    }
+  }
+
+  async function handleCreateOpenChat(e: React.FormEvent) {
+    e.preventDefault();
+    if (!newOpenChatId.trim()) return alert('請填寫社群 ID');
+    setIsCreatingOpenChat(true);
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+    if (idToken) headers['Authorization'] = `Bearer ${idToken}`;
+    else headers['x-test-user-id'] = 'super_admin_001';
+
+    try {
+      const res = await fetch('/api/admin/groups', {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          group_id: newOpenChatId.trim(),
+          group_name: newOpenChatName.trim() || newOpenChatId.trim(),
+          group_type: 'openchat',
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || '建立失敗');
+      alert('🎉 LINE 社群建立成功！可至「團主授權」分頁將該社群指派給團主開團。');
+      setNewOpenChatId('');
+      setNewOpenChatName('');
+      loadData();
+    } catch (err: unknown) {
+      alert(err instanceof Error ? err.message : '建立失敗');
+    } finally {
+      setIsCreatingOpenChat(false);
+    }
+  }
+
+  async function handleRotateToken(groupId: string) {
+    if (!window.confirm('確定要輪替此社群的 Token 憑證嗎？\n舊連結將即刻失效，團主需重新發布公告。')) return;
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+    if (idToken) headers['Authorization'] = `Bearer ${idToken}`;
+    else headers['x-test-user-id'] = 'super_admin_001';
+
+    try {
+      const res = await fetch('/api/admin/groups', {
+        method: 'PATCH',
+        headers,
+        body: JSON.stringify({
+          group_id: groupId,
+          action: 'rotate_token',
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || '輪替失敗');
+      alert(`🎉 Token 輪替成功！新 Token: ${data.join_token}`);
+      loadData();
+    } catch (err: unknown) {
+      alert(err instanceof Error ? err.message : '操作失敗');
     }
   }
 
@@ -628,11 +688,48 @@ function SuperAdminContent() {
       {activeTab === 'groups' && (
         <div className="space-y-3">
           <div className="flex justify-between items-center px-1">
-            <span className="text-xs font-bold text-slate-500 uppercase">已加入之 LINE 羽球群組</span>
+            <span className="text-xs font-bold text-slate-500 uppercase">群組與 LINE 社群管理</span>
             <button onClick={() => loadData()} className="text-slate-400 hover:text-slate-600">
               <RefreshCw size={14} />
             </button>
           </div>
+
+          {/* 新增 LINE 社群表單 */}
+          <form
+            onSubmit={handleCreateOpenChat}
+            className="bg-emerald-50/70 p-4 rounded-2xl border border-emerald-200 shadow-xs space-y-2.5 text-xs text-slate-700"
+          >
+            <div className="font-bold text-emerald-900 flex items-center gap-1.5">
+              <span>👥 新增 LINE 社群 (OpenChat)</span>
+            </div>
+            <p className="text-[11px] text-emerald-800/80 leading-relaxed">
+              因 LINE 社群無法進駐機器人，請在此手動建立社群代碼（建議以 <code className="font-mono bg-white px-1 py-0.5 rounded border border-emerald-300">openchat_</code> 開頭，例如社群邀請網址 Token）
+            </p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              <input
+                type="text"
+                required
+                placeholder="社群 ID (例: openchat_taipei)"
+                value={newOpenChatId}
+                onChange={(e) => setNewOpenChatId(e.target.value)}
+                className="w-full p-2 bg-white border border-emerald-300 rounded-lg outline-none font-mono text-xs"
+              />
+              <input
+                type="text"
+                placeholder="社群顯示名稱 (例: 雙北羽球暢打社群)"
+                value={newOpenChatName}
+                onChange={(e) => setNewOpenChatName(e.target.value)}
+                className="w-full p-2 bg-white border border-emerald-300 rounded-lg outline-none text-xs"
+              />
+            </div>
+            <button
+              type="submit"
+              disabled={isCreatingOpenChat}
+              className="w-full py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl transition shadow-xs text-xs disabled:opacity-50"
+            >
+              {isCreatingOpenChat ? '建立中...' : '確認新增 LINE 社群並產生 Token'}
+            </button>
+          </form>
 
           {loading ? (
             <div className="text-center py-10 text-xs text-slate-400">載入群組中...</div>
@@ -648,12 +745,29 @@ function SuperAdminContent() {
               >
                 <div className="flex items-center justify-between">
                   <div>
-                    <h3 className="font-bold text-sm text-slate-800">
-                      {g.group_name || '未命名羽球群組'}
-                    </h3>
-                    <div className="text-[11px] text-slate-400 font-mono mt-0.5">
-                      ID: {g.group_id.slice(0, 16)}...
+                    <div className="flex items-center gap-1.5">
+                      <h3 className="font-bold text-sm text-slate-800">
+                        {g.group_name || '未命名羽球群組'}
+                      </h3>
+                      {g.group_type === 'openchat' ? (
+                        <span className="text-[10px] px-1.5 py-0.2 rounded bg-amber-100 text-amber-800 font-bold border border-amber-200">
+                          👥 LINE 社群
+                        </span>
+                      ) : (
+                        <span className="text-[10px] px-1.5 py-0.2 rounded bg-blue-100 text-blue-800 font-medium">
+                          💬 LINE 群組
+                        </span>
+                      )}
                     </div>
+                    <div className="text-[11px] text-slate-400 font-mono mt-0.5">
+                      ID: {g.group_id}
+                    </div>
+                    {g.group_type === 'openchat' && (
+                      <div className="text-[11px] text-slate-500 font-mono mt-0.5 flex items-center gap-1.5">
+                        <Key size={11} className="text-amber-600 shrink-0" />
+                        <span>Token: {g.join_token || '(未設定)'}</span>
+                      </div>
+                    )}
                   </div>
                   <span
                     className={`text-xs px-2.5 py-0.5 rounded-full font-bold ${
@@ -666,7 +780,7 @@ function SuperAdminContent() {
                   </span>
                 </div>
 
-                <div className="pt-2 border-t border-slate-100 flex items-center justify-between gap-2">
+                <div className="pt-2 border-t border-slate-100 flex items-center justify-between gap-2 flex-wrap">
                   <button
                     onClick={() => toggleGroupStatus(g.group_id, g.is_active)}
                     className={`flex items-center gap-1 text-xs px-3 py-1.5 rounded-xl font-bold transition-all ${
@@ -679,13 +793,23 @@ function SuperAdminContent() {
                     {g.is_active ? '暫停該群服務' : '恢復該群服務'}
                   </button>
 
-                  <button
-                    onClick={() => handleLeaveGroup(g.group_id)}
-                    className="flex items-center gap-1 text-xs text-red-600 hover:text-red-700 font-semibold px-2.5 py-1.5 rounded-xl border border-red-200 hover:bg-red-50 transition-colors"
-                  >
-                    <LogOut size={13} />
-                    主動退出群組
-                  </button>
+                  {g.group_type === 'openchat' ? (
+                    <button
+                      onClick={() => handleRotateToken(g.group_id)}
+                      className="flex items-center gap-1 text-xs text-amber-700 hover:bg-amber-50 border border-amber-300 font-bold px-2.5 py-1.5 rounded-xl transition-colors"
+                    >
+                      <RefreshCw size={12} />
+                      輪替 Token
+                    </button>
+                  ) : (
+                    <button
+                      onClick={() => handleLeaveGroup(g.group_id)}
+                      className="flex items-center gap-1 text-xs text-red-600 hover:text-red-700 font-semibold px-2.5 py-1.5 rounded-xl border border-red-200 hover:bg-red-50 transition-colors"
+                    >
+                      <LogOut size={13} />
+                      主動退出群組
+                    </button>
+                  )}
                 </div>
               </div>
             ))

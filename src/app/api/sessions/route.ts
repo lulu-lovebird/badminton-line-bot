@@ -3,7 +3,7 @@ import { supabaseAdmin } from '@/lib/supabase';
 import { lineClient } from '@/lib/line';
 import { verifyLineIdToken, isSuperAdmin } from '@/lib/auth';
 import { getAuthenticatedUserId, hasHostGroupPermission, isGlobalAdmin } from '@/lib/host-permissions';
-import { isUserInGroup } from '@/lib/line-group-auth';
+import { isUserInGroup, checkGroupAccess } from '@/lib/line-group-auth';
 import {
   generateSessionCacheKey,
   getSessionCache,
@@ -26,6 +26,7 @@ export async function GET(req: NextRequest) {
   const date = searchParams.get('date')?.trim() || null;
   const status = searchParams.get('status')?.trim() || null;
   const hostId = searchParams.get('hostId')?.trim() || null;
+  const token = searchParams.get('token')?.trim() || null;
   const upcomingOnly = searchParams.get('upcomingOnly') === 'true';
   const isRefresh =
     searchParams.get('refresh') === 'true' ||
@@ -47,7 +48,12 @@ export async function GET(req: NextRequest) {
 
   if (upcomingOnly) {
     if (!allowCrossGroup && groupId) {
-      canListGroup = caller ? await isUserInGroup(groupId, caller) : false;
+      if (caller) {
+        const access = await checkGroupAccess({ groupId, userId: caller, token });
+        canListGroup = access.allowed;
+      } else {
+        canListGroup = false;
+      }
       if (!canListGroup && !sessionId) {
         return NextResponse.json(
           { error: caller ? '非該群組成員，無法查看場次' : '請先登入以驗證群組成員身分' },

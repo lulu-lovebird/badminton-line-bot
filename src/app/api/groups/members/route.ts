@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 import { verifyLineIdToken, isSuperAdmin } from '@/lib/auth';
 import { hasHostGroupPermission } from '@/lib/host-permissions';
-import { isUserInGroup } from '@/lib/line-group-auth';
+import { isUserInGroup, checkGroupAccess } from '@/lib/line-group-auth';
 
 export const dynamic = 'force-dynamic';
 
@@ -197,10 +197,26 @@ export async function POST(req: NextRequest) {
       );
     }
     if (!isHostOrAdmin) {
-      const { data: group } = await supabaseAdmin.from('groups')
-        .select('is_active').eq('group_id', group_id).maybeSingle();
-      if (!group?.is_active || !(await isUserInGroup(group_id, caller.userId))) {
-        return NextResponse.json({ error: '只有此群組的成員可以登記固定咖' }, { status: 403 });
+      const token = body.token || req.nextUrl.searchParams.get('token');
+      // 一般 LINE 群組維持檢查群組是否啟用
+      if (!group_id.startsWith('openchat_')) {
+        const { data: group } = await supabaseAdmin.from('groups')
+          .select('is_active').eq('group_id', group_id).maybeSingle();
+        if (!group?.is_active) {
+          return NextResponse.json({ error: '群組不存在或已停用' }, { status: 403 });
+        }
+      }
+
+      const access = await checkGroupAccess({
+        groupId: group_id,
+        userId: caller.userId,
+        token,
+      });
+      if (!access.allowed) {
+        return NextResponse.json(
+          { error: access.reason || '只有此群組的成員可以登記固定咖' },
+          { status: 403 }
+        );
       }
     }
 

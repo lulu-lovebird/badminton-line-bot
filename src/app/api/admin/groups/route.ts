@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import crypto from 'crypto';
 import { supabaseAdmin } from '@/lib/supabase';
 import { lineClient } from '@/lib/line';
 import { verifyLineIdToken, isSuperAdmin } from '@/lib/auth';
@@ -55,7 +56,55 @@ export async function GET(req: NextRequest) {
   return NextResponse.json(groups);
 }
 
-// 停用群組 或 強制機器人退出群組
+// 新增 LINE 社群 (OpenChat)
+export async function POST(req: NextRequest) {
+  const isAdmin = await verifySuperAdmin(req);
+  if (!isAdmin) {
+    return NextResponse.json({ error: '無權限存取' }, { status: 403 });
+  }
+
+  try {
+    const { group_id, group_name } = await req.json();
+    if (!group_id || typeof group_id !== 'string') {
+      return NextResponse.json({ error: '請提供有效的社群 ID' }, { status: 400 });
+    }
+    const cleanId = group_id.trim();
+    if (!cleanId.startsWith('openchat_')) {
+      return NextResponse.json({ error: 'LINE 社群 ID 必須以 openchat_ 開頭，避免與既有群組衝突' }, { status: 400 });
+    }
+
+    // 檢查是否已存在，嚴禁覆蓋既有群組
+    const { data: existing } = await supabaseAdmin
+      .from('groups')
+      .select('group_id')
+      .eq('group_id', cleanId)
+      .maybeSingle();
+
+    if (existing) {
+      return NextResponse.json({ error: '此社群 ID 已存在，請使用不同 ID 或於列表管理' }, { status: 409 });
+    }
+
+    // 產生 128-bit (16 bytes) 高強度安全 Token
+    const token = crypto.randomBytes(16).toString('hex');
+
+    const { data, error } = await supabaseAdmin.from('groups').insert({
+      group_id: cleanId,
+      group_name: group_name?.trim() || cleanId,
+      group_type: 'openchat',
+      join_token: token,
+      is_active: true,
+      updated_at: new Date().toISOString(),
+    }).select().single();
+
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json(data);
+  } catch (err: unknown) {
+    const errorMsg = err instanceof Error ? err.message : '建立失敗';
+    return NextResponse.json({ error: errorMsg }, { status: 500 });
+  }
+}
+
+// 停用群組、輪替 Token 或 強制機器人退出群組
 export async function PATCH(req: NextRequest) {
   const isAdmin = await verifySuperAdmin(req);
   if (!isAdmin) {
@@ -74,6 +123,21 @@ export async function PATCH(req: NextRequest) {
         .single();
 
       if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+      return NextResponse.json(data);
+    }
+
+    if (action === 'rotate_token') {
+      const newToken = crypto.randomBytes(16).toString('hex');
+      const { data, error } = await supabaseAdmin
+        .from('groups')
+        .update({ join_token: newToken, updated_at: new Date().toISOString() })
+        .eq('group_id', group_id)
+        .eq('group_type', 'openchat')
+        .select()
+        .maybeSingle();
+
+      if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+      if (!data) return NextResponse.json({ error: '找不到該社群或該群組非 LINE 社群' }, { status: 404 });
       return NextResponse.json(data);
     }
 

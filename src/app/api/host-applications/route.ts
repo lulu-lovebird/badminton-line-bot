@@ -52,9 +52,12 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: '請選擇申請的群組' }, { status: 400 });
     }
     const { data: group, error: groupError } = await supabaseAdmin.from('groups')
-      .select('group_id, group_name, is_active').eq('group_id', group_id).maybeSingle();
+      .select('group_id, group_name, is_active, group_type').eq('group_id', group_id).maybeSingle();
     if (groupError) throw new Error(groupError.message);
     if (!group?.is_active) return NextResponse.json({ error: '群組不存在或已停用' }, { status: 404 });
+    if (group.group_type === 'openchat') {
+      return NextResponse.json({ error: 'LINE 社群開團權限需由最高管理員手動指派，無法自行提出申請' }, { status: 403 });
+    }
     if (!(await isUserInGroup(group_id, caller))) {
       return NextResponse.json({ error: '您必須是該 LINE 群組成員才能申請' }, { status: 403 });
     }
