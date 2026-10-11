@@ -40,3 +40,15 @@ export async function initLiff() {
 
   return initPromise;
 }
+
+/**
+ * 取得當前有效的 LINE Token (優先 ID Token，次選 Access Token 雙軌支援)
+ */
+export function getLiffToken(liff: any): string {
+  if (!liff) return '';
+  try {
+    return liff.getIDToken() || (typeof liff.getAccessToken === 'function' ? liff.getAccessToken() : '') || '';
+  } catch {
+    return '';
+  }
+}

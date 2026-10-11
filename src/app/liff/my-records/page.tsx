@@ -3,11 +3,13 @@
 import React, { useState, useEffect } from 'react';
 import { Calendar, MapPin, AlertTriangle, XCircle, Clock, User, RefreshCw } from 'lucide-react';
 import { Registration } from '@/types/database';
-import { initLiff } from '@/lib/liff-client';
+import { initLiff, getLiffToken } from '@/lib/liff-client';
+import { useLiff } from '@/components/liff-provider';
 
 type RecordWithConflict = Registration & { hasConflict?: boolean };
 
 export default function MyRecordsPage() {
+  const { userProfile: liffProfile, idToken: liffToken, isReady } = useLiff();
   const [records, setRecords] = useState<RecordWithConflict[]>([]);
   const [loading, setLoading] = useState(true);
   const [userProfile, setUserProfile] = useState<{ userId: string; displayName: string } | null>(null);
@@ -20,16 +22,21 @@ export default function MyRecordsPage() {
     async function setup() {
       try {
         const liff = await initLiff();
-        let token = '';
+        let token = liffToken || '';
         if (liff && liff.isLoggedIn()) {
-          const profile = await liff.getProfile();
-          token = liff.getIDToken() || '';
+          const profile = await liff.getProfile().catch(() => null);
+          token = token || getLiffToken(liff);
           setIdToken(token);
-          setUserProfile({
-            userId: profile.userId,
-            displayName: profile.displayName,
-          });
-        } else {
+          if (profile) {
+            setUserProfile({
+              userId: profile.userId,
+              displayName: profile.displayName,
+            });
+          }
+        } else if (liffProfile) {
+          setUserProfile(liffProfile);
+          if (liffToken) setIdToken(liffToken);
+        } else if (process.env.NODE_ENV !== 'production') {
           // 本地開發模擬測試帳號
           const demoUserId = 'U_demo_player_001';
           setUserProfile({
@@ -37,26 +44,39 @@ export default function MyRecordsPage() {
             displayName: '測試球友小明',
           });
         }
-        fetchRecords(token);
+        fetchRecords(token || liffToken);
       } catch (err) {
         console.error(err);
       }
     }
-    setup();
-  }, []);
+    if (isReady) {
+      setup();
+    }
+  }, [isReady, liffToken, liffProfile]);
 
   async function fetchRecords(token?: string) {
     setLoading(true);
     try {
-      const currentToken = token || idToken;
+      let currentToken = token || idToken || liffToken;
+      if (!currentToken && typeof window !== 'undefined') {
+        const liff = await initLiff();
+        currentToken = getLiffToken(liff);
+        if (currentToken) setIdToken(currentToken);
+      }
       const headers: Record<string, string> = {};
       if (currentToken) {
         headers['Authorization'] = `Bearer ${currentToken}`;
-      } else {
-        headers['x-test-user-id'] = 'U_demo_player_001';
+      } else if (process.env.NODE_ENV !== 'production') {
+        headers['x-test-user-id'] = userProfile?.userId || 'U_demo_player_001';
       }
 
-      const res = await fetch('/api/registrations', { headers });
+      const res = await fetch('/api/registrations', { headers, cache: 'no-store' });
+      if (!res.ok) {
+        const errJson = await res.json().catch(() => ({}));
+        console.warn('載入報名記錄未通過:', res.status, errJson);
+        setRecords([]);
+        return;
+      }
       const data = await res.json();
       setRecords(Array.isArray(data) ? data : []);
     } catch (err) {
@@ -79,9 +99,14 @@ export default function MyRecordsPage() {
     setMsg(null);
 
     try {
+      let currentToken = idToken || liffToken;
+      if (!currentToken && typeof window !== 'undefined') {
+        const liff = await initLiff();
+        currentToken = getLiffToken(liff);
+      }
       const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-      if (idToken) headers['Authorization'] = `Bearer ${idToken}`;
-      else headers['x-test-user-id'] = 'U_demo_player_001';
+      if (currentToken) headers['Authorization'] = `Bearer ${currentToken}`;
+      else if (process.env.NODE_ENV !== 'production') headers['x-test-user-id'] = 'U_demo_player_001';
 
       const res = await fetch('/api/registrations', {
         method: 'PATCH',
