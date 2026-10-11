@@ -497,15 +497,21 @@ function AdminDashboardContent() {
         const grantedGroups: { group_id: string; group_name: string }[] = await groupRes.json();
         const candidateGroups: { group_id: string; group_name: string }[] = await candidateRes.json();
         const appData = await appRes.json();
-        const chosenId = requestedId || (grantedGroups.length === 1 ? grantedGroups[0].group_id : '');
+
+        // 核心修正：若有已授權群組，優先對齊 requestedId，若未指定則預設選取第 1 個已授權群組 (避免多群組被誤判為未授權)
+        const hasGranted = grantedGroups.length > 0;
+        const matchedGranted = grantedGroups.find((g) => g.group_id === requestedId);
+        const chosenId = matchedGranted ? matchedGranted.group_id : (hasGranted ? grantedGroups[0].group_id : requestedId);
+
         setSelectedGroupId(chosenId);
         setAvailableGroups(grantedGroups);
         setApplication(appData.applications?.find((a: { group_id: string }) => a.group_id === chosenId) || null);
-        setForm((prev) => ({ ...prev, group_id: chosenId && grantedGroups.some((g) => g.group_id === chosenId) ? chosenId : '' }));
+        setForm((prev) => ({ ...prev, group_id: chosenId || '' }));
         setApplicationGroups(candidateGroups);
-        if ((user.role === 'admin' || user.is_super_admin || grantedGroups.some((g) => g.group_id === chosenId)) && chosenId) {
+
+        if (user.role === 'admin' || user.is_super_admin || hasGranted) {
           setIsAuthorized(true);
-          await fetchSessions(token, user.line_user_id, false, user, chosenId);
+          await fetchSessions(token, user.line_user_id, false, user, chosenId || undefined);
         } else {
           setAuthError(chosenId ? '尚未取得此群組的開團權限。' : '請先選擇您要申請的群組。');
           setIsAuthorized(false);
@@ -1263,6 +1269,31 @@ function AdminDashboardContent() {
 
       {emailContactPanel}
       {emailContactError && !emailFeature.email_enabled && <p role="alert" className="mb-3 text-xs text-red-600">Email 設定錯誤：{emailContactError}</p>}
+
+      {/* 多群組切換器：當團主管理多個群組/社群時，可於頂部快速切換 */}
+      {availableGroups.length > 1 && (
+        <div className="bg-white p-2.5 rounded-2xl border border-slate-200 shadow-2xs mb-3 flex items-center justify-between gap-2 text-xs">
+          <span className="font-bold text-slate-600 shrink-0 flex items-center gap-1">
+            <span>🏸 目前管理群組：</span>
+          </span>
+          <select
+            value={selectedGroupId || form.group_id}
+            onChange={(e) => {
+              const newGid = e.target.value;
+              setSelectedGroupId(newGid);
+              setForm((prev) => ({ ...prev, group_id: newGid }));
+              fetchSessions(idToken, userProfile?.line_user_id, false, userProfile, newGid);
+            }}
+            className="p-1.5 border border-slate-200 rounded-xl bg-slate-50 font-bold text-slate-800 outline-none flex-1 truncate text-xs"
+          >
+            {availableGroups.map((g) => (
+              <option key={g.group_id} value={g.group_id}>
+                {g.group_type === 'openchat' ? '👥 [社群] ' : '🏸 '} {g.group_name || g.group_id}
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
 
       <div className="flex bg-white rounded-2xl p-1 shadow-sm mb-4 border border-slate-200">
         <button
