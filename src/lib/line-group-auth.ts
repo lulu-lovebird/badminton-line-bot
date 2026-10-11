@@ -32,11 +32,15 @@ export async function checkGroupAccess(params: {
 
   // 1. 若為 LINE 社群 (以 openchat_ 前綴識別)
   if (groupId.startsWith('openchat_')) {
-    const { data: group } = await supabaseAdmin
+    const { data: group, error } = await supabaseAdmin
       .from('groups')
       .select('group_id, group_type, join_token, is_active')
       .eq('group_id', groupId)
       .maybeSingle();
+
+    if (error && error.code === '42703') {
+      return { allowed: false, reason: '資料庫尚未執行社群擴充腳本 (migration)', is_openchat: true };
+    }
 
     if (!group || !group.is_active || group.group_type !== 'openchat') {
       return { allowed: false, reason: '此 LINE 社群不存在或已停用', is_openchat: true };

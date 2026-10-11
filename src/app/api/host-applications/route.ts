@@ -51,9 +51,19 @@ export async function POST(req: NextRequest) {
     if (typeof group_id !== 'string' || !group_id.trim()) {
       return NextResponse.json({ error: '請選擇申請的群組' }, { status: 400 });
     }
-    const { data: group, error: groupError } = await supabaseAdmin.from('groups')
+    let group: { group_id: string; group_name: string | null; is_active: boolean | null; group_type?: string } | null = null;
+    const { data: gData, error: gError } = await supabaseAdmin.from('groups')
       .select('group_id, group_name, is_active, group_type').eq('group_id', group_id).maybeSingle();
-    if (groupError) throw new Error(groupError.message);
+    if (gError && gError.code === '42703') {
+      const { data: fbGroup, error: fbError } = await supabaseAdmin.from('groups')
+        .select('group_id, group_name, is_active').eq('group_id', group_id).maybeSingle();
+      if (fbError) throw new Error(fbError.message);
+      group = fbGroup;
+    } else if (gError) {
+      throw new Error(gError.message);
+    } else {
+      group = gData;
+    }
     if (!group?.is_active) return NextResponse.json({ error: '群組不存在或已停用' }, { status: 404 });
     if (group.group_type === 'openchat') {
       return NextResponse.json({ error: 'LINE 社群開團權限需由最高管理員手動指派，無法自行提出申請' }, { status: 403 });
