@@ -140,6 +140,22 @@ export function LiffProvider({ children }: { children: React.ReactNode }) {
       }}
     >
       {children}
+      {process.env.NEXT_PUBLIC_DEBUG === 'on' && (
+        <aside
+          aria-label="LIFF 安全診斷"
+          className="fixed right-2 top-2 z-50 rounded-lg bg-slate-900 p-3 text-xs text-white shadow-lg"
+        >
+          <strong>LIFF 安全診斷</strong>
+          <ul>
+            <li>流程完成：{isReady ? '是' : '否'}</li>
+            <li>SDK 初始化成功：{liff ? '是' : '否'}</li>
+            <li>LIFF 瀏覽器：{isReady ? (isInClient ? '是' : '否') : '待確認'}</li>
+            <li>已登入：{isReady ? (isLoggedIn ? '是' : '否') : '待確認'}</li>
+            <li>登入憑證存在：{idToken ? '是' : '否'}</li>
+            <li>初始化錯誤：{error ? '有' : '無'}</li>
+          </ul>
+        </aside>
+      )}
     </LiffContext.Provider>
   );
 }

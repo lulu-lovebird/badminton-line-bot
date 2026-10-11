@@ -12,10 +12,11 @@ function LiffHubContent() {
   const groupId = searchParams?.get('groupId') || '';
   const groupQuery = groupId ? `?groupId=${encodeURIComponent(groupId)}` : '';
 
-  const { userProfile, isReady } = useLiff();
+  const { userProfile, isReady, error } = useLiff();
 
   useEffect(() => {
     document.title = '羽球零打小幫手 JuJu 🏸';
+    if (!isReady || error) return;
     const action = searchParams?.get('action');
     const sessionId = searchParams?.get('sessionId');
     const token = searchParams?.get('token');
@@ -26,7 +27,7 @@ function LiffHubContent() {
       if (token) q.set('token', token);
       router.replace(`/liff/sessions?${q.toString()}`);
     }
-  }, [searchParams, groupId, router]);
+  }, [searchParams, groupId, router, isReady, error]);
 
   return (
     <main className="min-h-screen bg-slate-50 p-6 flex flex-col items-center justify-center max-w-md mx-auto text-center pb-24">
