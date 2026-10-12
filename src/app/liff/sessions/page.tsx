@@ -20,6 +20,7 @@ function SessionListContent() {
   const searchParams = useSearchParams();
   const targetSessionId = searchParams.get('sessionId') || '';
   const tokenParam = searchParams.get('token') || '';
+  const isExternalEntry = searchParams.get('externalLogin') === '1';
   const [currentGroupId, setCurrentGroupId] = useState<string>(searchParams.get('groupId') || '');
 
   const [sessions, setSessions] = useState<MatchSession[]>([]);
@@ -34,7 +35,8 @@ function SessionListContent() {
   // 取得台灣時區當天日期字串 YYYY-MM-DD，防呆阻止選擇已過去的日期
   const todayTaipeiStr = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Taipei' }).format(new Date());
 
-  const { userProfile, idToken, isReady, isLoggedIn } = useLiff();
+  const { userProfile, idToken, isReady, isLoggedIn, login, error: liffError } = useLiff();
+  const needsExternalLogin = isExternalEntry && (!isLoggedIn || !idToken);
 
   // 我所屬的球隊清單（私訊進入且嚴格隔離時，供球友選擇自己所屬群組）
   const [myGroups, setMyGroups] = useState<{ group_id: string; group_name: string }[]>([]);
@@ -54,6 +56,7 @@ function SessionListContent() {
   // 取得場次 (支援智慧快取與強制刷新)
   const fetchSeqRef = useRef(0);
   async function fetchSessions(dateFilter = selectedDate, groupFilter = currentGroupId, isManualRefresh = false) {
+    if (needsExternalLogin) return;
     const requestId = ++fetchSeqRef.current;
     setLoading(true);
     try {
@@ -105,6 +108,10 @@ function SessionListContent() {
   useEffect(() => {
     document.title = '🏸 我要報名零打';
     if (!isReady || hasFetchedRef.current) return;
+    if (needsExternalLogin) {
+      setLoading(false);
+      return;
+    }
     if (isLoggedIn && !idToken && !userProfile?.userId) {
       setLoading(false);
       setMessage({ type: 'error', text: '無法取得 LINE 登入憑證，請從 LINE 重新開啟頁面' });
@@ -112,11 +119,11 @@ function SessionListContent() {
     }
     hasFetchedRef.current = true;
     fetchSessions();
-  }, [isReady, isLoggedIn, idToken, userProfile?.userId]);
+  }, [isReady, isLoggedIn, idToken, userProfile?.userId, needsExternalLogin]);
 
   // 從私訊 / 圖文選單進入且無 groupId 時，載入球友本人實際所屬的啟用群組
   useEffect(() => {
-    if (!isReady || (isLoggedIn && !idToken && !userProfile?.userId) || currentGroupId || isCrossGroupAllowed) return;
+    if (!isReady || needsExternalLogin || (isLoggedIn && !idToken && !userProfile?.userId) || currentGroupId || isCrossGroupAllowed) return;
     let cancelled = false;
     (async () => {
       const headers: Record<string, string> = {};
@@ -132,7 +139,7 @@ function SessionListContent() {
     return () => {
       cancelled = true;
     };
-  }, [isReady, isLoggedIn, currentGroupId, isCrossGroupAllowed, idToken, userProfile?.userId]);
+  }, [isReady, isLoggedIn, currentGroupId, isCrossGroupAllowed, idToken, userProfile?.userId, needsExternalLogin]);
 
   const fetchRoster = async (sessionId: string) => {
     setRosterData((prev) => ({
@@ -179,7 +186,7 @@ function SessionListContent() {
   };
 
   const handleRegister = async (session: MatchSession) => {
-    if (!userProfile) {
+    if (!userProfile || needsExternalLogin) {
       alert('請先在 LINE 中開啟或登入！');
       return;
     }
@@ -265,6 +272,20 @@ function SessionListContent() {
           </div>
         )}
       </div>
+
+      {isExternalEntry && isReady && needsExternalLogin && (
+        <section className="mb-4 rounded-xl border border-blue-200 bg-blue-50 p-4 text-sm">
+          <p>請使用 LINE 登入後查看場次及報名。登入後將回到此報名連結。</p>
+          {liffError && <p role="alert">{liffError}</p>}
+          <button
+            type="button"
+            onClick={login}
+            className="mt-3 rounded-lg bg-emerald-600 px-4 py-2 font-bold text-white"
+          >
+            使用 LINE 登入
+          </button>
+        </section>
+      )}
 
       {/* 提示訊息 */}
       {message && (

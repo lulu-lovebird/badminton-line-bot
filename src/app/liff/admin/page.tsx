@@ -6,7 +6,7 @@ import { useSearchParams } from 'next/navigation';
 import { PlusCircle, Users, CheckCircle, Clock, Calendar, MapPin, Send, AlertCircle, RefreshCw, ShieldAlert, Key, Copy, Shield, UserPlus, FileText, User, Share2, Pencil, X, Ban, Trash2, Settings, Star, ChevronDown, ChevronUp, UserCheck } from 'lucide-react';
 import { MatchSession, Registration, GroupMembership } from '@/types/database';
 import { initLiff } from '@/lib/liff-client';
-import { getSessionLiffUrl, formatSessionAnnouncement, shareSessionViaTargetPicker, getRegularInviteLiffUrl } from '@/lib/share-utils';
+import { getSessionLiffUrl, getExternalSessionUrl, formatSessionAnnouncement, shareSessionViaTargetPicker, getRegularInviteLiffUrl } from '@/lib/share-utils';
 
 // 輔助函式：計算時間順延天數並輸出 datetime-local 格式 (YYYY-MM-DDTHH:mm) - 強制以台灣時區 Asia/Taipei 轉換
 function toDatetimeLocalString(dateStr: string | Date, addDays = 0): string {
@@ -3166,6 +3166,24 @@ function AdminDashboardContent() {
                     </div>
                     <span className="text-xs text-blue-600 font-bold bg-blue-50 px-2 py-0.5 rounded-md shrink-0">複製</span>
                   </button>
+
+                  {isOpenChat && (
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        try {
+                          const url = getExternalSessionUrl(shareModalSession, window.location.origin, joinToken || '');
+                          await navigator.clipboard.writeText(url);
+                          setCopyToast('✓ 已複製外部瀏覽器報名連結，首次使用需 LINE 登入');
+                        } catch {
+                          setCopyToast('無法複製外部報名連結，請確認社群憑證及剪貼簿權限');
+                        }
+                      }}
+                      className="w-full rounded-2xl border border-blue-200 bg-white px-4 py-3 text-xs font-bold text-blue-700"
+                    >
+                      複製外部瀏覽器報名連結（測試）
+                    </button>
+                  )}
 
                   {/* 按鈕 3: 複製開團文案 */}
                   <button

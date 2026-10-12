@@ -39,6 +39,24 @@ export function getSessionLiffUrl(sessionOrId: string | MatchSession, liffBaseUr
   return `${cleanBase}/sessions?sessionId=${sessionId}${groupParam}${tokenParam}`;
 }
 
+/** 外部瀏覽器入口必須使用網站網址，不能使用 liff.line.me。 */
+export function getExternalSessionUrl(session: MatchSession, websiteOrigin: string, token: string): string {
+  const origin = new URL(websiteOrigin);
+  if (origin.protocol !== 'https:' || origin.hostname === 'liff.line.me') {
+    throw new Error('外部報名入口必須使用 HTTPS 網站網址');
+  }
+  if (!session.group_id?.startsWith('openchat_') || !token) {
+    throw new Error('社群報名連結缺少群組或通行憑證');
+  }
+  const url = new URL('/liff/sessions', origin.origin);
+  url.searchParams.set('sessionId', session.id);
+  url.searchParams.set('groupId', session.group_id);
+  url.searchParams.set('token', token);
+  url.searchParams.set('externalLogin', '1');
+  url.searchParams.set('openExternalBrowser', '1');
+  return url.toString();
+}
+
 /**
  * 取得固定咖專屬登記專用 LIFF 連結 (自動導向官方 LIFF 端點以保證自動登入授權)
  */

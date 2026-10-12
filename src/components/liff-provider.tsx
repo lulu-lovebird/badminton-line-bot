@@ -19,6 +19,7 @@ interface LiffContextType {
   userProfile: LiffUserProfile | null;
   idToken: string;
   error: string | null;
+  login: () => void;
 }
 
 const LiffContext = createContext<LiffContextType>({
@@ -29,6 +30,7 @@ const LiffContext = createContext<LiffContextType>({
   userProfile: null,
   idToken: '',
   error: null,
+  login: () => {},
 });
 
 export function LiffProvider({ children }: { children: React.ReactNode }) {
@@ -106,7 +108,7 @@ export function LiffProvider({ children }: { children: React.ReactNode }) {
           }
         } else {
           // 外部瀏覽器未登入訪客模式
-          if (isMounted) {
+          if (isMounted && new URLSearchParams(window.location.search).get('externalLogin') !== '1') {
             setUserProfile({
               userId: 'U_guest_player',
               displayName: '球友',
@@ -127,6 +129,19 @@ export function LiffProvider({ children }: { children: React.ReactNode }) {
     };
   }, []);
 
+  const login = () => {
+    if (!liff || !isReady) return;
+    try {
+      const redirect = new URL(window.location.href);
+      if (redirect.pathname !== '/liff/sessions' || redirect.searchParams.get('externalLogin') !== '1') return;
+      // 使用目前的網站及完整報名參數，不接受外部傳入的 redirect URI。
+      redirect.hash = '';
+      liff.login({ redirectUri: redirect.toString() });
+    } catch {
+      setError('無法開始 LINE 登入，請重新開啟報名連結');
+    }
+  };
+
   return (
     <LiffContext.Provider
       value={{
@@ -137,6 +152,7 @@ export function LiffProvider({ children }: { children: React.ReactNode }) {
         userProfile,
         idToken,
         error,
+        login,
       }}
     >
       {children}
