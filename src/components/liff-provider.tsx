@@ -20,6 +20,7 @@ interface LiffContextType {
   idToken: string;
   error: string | null;
   login: () => void;
+  markAuthExpired: () => void;
 }
 
 const LiffContext = createContext<LiffContextType>({
@@ -31,6 +32,7 @@ const LiffContext = createContext<LiffContextType>({
   idToken: '',
   error: null,
   login: () => {},
+  markAuthExpired: () => {},
 });
 
 export function LiffProvider({ children }: { children: React.ReactNode }) {
@@ -41,6 +43,9 @@ export function LiffProvider({ children }: { children: React.ReactNode }) {
   const [userProfile, setUserProfile] = useState<LiffUserProfile | null>(null);
   const [idToken, setIdToken] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const [authExpired, setAuthExpired] = useState(false);
+  const [reauthenticating, setReauthenticating] = useState(false);
+  const [reauthError, setReauthError] = useState<string | null>(null);
 
   useEffect(() => {
     let isMounted = true;
@@ -82,7 +87,10 @@ export function LiffProvider({ children }: { children: React.ReactNode }) {
                   Authorization: `Bearer ${token}`,
                 },
               })
-                .then((res) => res.json())
+                .then((res) => {
+                  if (res.status === 401 && isMounted) setAuthExpired(true);
+                  return res.json();
+                })
                 .then((userData) => {
                   if (userData && !userData.error && isMounted) {
                     setUserProfile((prev) =>
@@ -142,6 +150,33 @@ export function LiffProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
+  const reauthenticate = () => {
+    if (!liff || !isReady || isInClient || reauthenticating) return;
+    try {
+      const current = new URL(window.location.href);
+      if (!['/liff/sessions', '/liff/my-records'].includes(current.pathname)) {
+        setReauthError('請從報名頁或報名記錄重新登入');
+        return;
+      }
+      const redirect = new URL(current.pathname, current.origin);
+      for (const key of ['sessionId', 'groupId', 'token']) {
+        const value = current.searchParams.get(key);
+        if (value) redirect.searchParams.set(key, value);
+      }
+      redirect.searchParams.set('externalLogin', '1');
+      setReauthenticating(true);
+      setReauthError(null);
+      liff.logout();
+      setIdToken('');
+      setUserProfile(null);
+      setIsLoggedIn(false);
+      liff.login({ redirectUri: redirect.toString() });
+    } catch {
+      setReauthenticating(false);
+      setReauthError('無法開始重新登入，請重新開啟報名連結再試');
+    }
+  };
+
   return (
     <LiffContext.Provider
       value={{
@@ -153,9 +188,31 @@ export function LiffProvider({ children }: { children: React.ReactNode }) {
         idToken,
         error,
         login,
+        markAuthExpired: () => setAuthExpired(true),
       }}
     >
       {children}
+      {authExpired && (
+        <section
+          role="alert"
+          className="fixed bottom-20 left-4 right-4 z-50 mx-auto max-w-md rounded-xl border border-amber-300 bg-amber-50 p-4 text-sm text-slate-900 shadow-lg"
+        >
+          <p>登入已失效，請重新登入後再操作。未成功的報名或取消不會自動重送。</p>
+          {isInClient ? (
+            <p className="mt-2">請關閉此頁，重新從 LINE 開啟報名連結。</p>
+          ) : (
+            <button
+              type="button"
+              onClick={reauthenticate}
+              disabled={!isReady || !liff || reauthenticating}
+              className="mt-3 rounded-lg bg-emerald-600 px-4 py-2 font-bold text-white disabled:opacity-50"
+            >
+              {reauthenticating ? '正在重新登入…' : '重新登入 LINE'}
+            </button>
+          )}
+          {reauthError && <p className="mt-2">{reauthError}</p>}
+        </section>
+      )}
       {process.env.NEXT_PUBLIC_DEBUG === 'on' && (
         <aside
           aria-label="LIFF 安全診斷"

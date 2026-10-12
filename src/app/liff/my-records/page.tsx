@@ -9,7 +9,7 @@ import { useLiff } from '@/components/liff-provider';
 type RecordWithConflict = Registration & { hasConflict?: boolean };
 
 export default function MyRecordsPage() {
-  const { userProfile: liffProfile, idToken: liffToken, isReady } = useLiff();
+  const { userProfile: liffProfile, idToken: liffToken, isReady, markAuthExpired } = useLiff();
   const [records, setRecords] = useState<RecordWithConflict[]>([]);
   const [loading, setLoading] = useState(true);
   const [userProfile, setUserProfile] = useState<{ userId: string; displayName: string } | null>(null);
@@ -72,12 +72,16 @@ export default function MyRecordsPage() {
 
       const res = await fetch('/api/registrations', { headers, cache: 'no-store' });
       if (!res.ok) {
-        const errJson = await res.json().catch(() => ({}));
-        console.warn('載入報名記錄未通過:', res.status, errJson);
-        setRecords([]);
+        if (res.status === 401) {
+          markAuthExpired();
+          setMsg('登入已失效，無法載入報名記錄；請重新登入。');
+        } else {
+          setMsg(`無法載入報名記錄（HTTP ${res.status}），請稍後重試。`);
+        }
         return;
       }
       const data = await res.json();
+      setMsg(null);
       setRecords(Array.isArray(data) ? data : []);
     } catch (err) {
       console.error(err);
@@ -117,6 +121,7 @@ export default function MyRecordsPage() {
         }),
       });
 
+      if (res.status === 401) markAuthExpired();
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || '取消失敗');
 

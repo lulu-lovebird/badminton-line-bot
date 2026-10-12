@@ -36,7 +36,7 @@ function SessionListContent() {
   // 取得台灣時區當天日期字串 YYYY-MM-DD，防呆阻止選擇已過去的日期
   const todayTaipeiStr = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Taipei' }).format(new Date());
 
-  const { userProfile, idToken, isReady, isLoggedIn, login, error: liffError } = useLiff();
+  const { userProfile, idToken, isReady, isLoggedIn, login, markAuthExpired, error: liffError } = useLiff();
   const needsExternalLogin = isExternalEntry && (!isLoggedIn || !idToken);
 
   // 我所屬的球隊清單（私訊進入且嚴格隔離時，供球友選擇自己所屬群組）
@@ -86,6 +86,7 @@ function SessionListContent() {
         const data = await res.json();
         if (requestId === fetchSeqRef.current) setSessions(Array.isArray(data) ? data : []);
       } else {
+        if (res.status === 401) markAuthExpired();
         const errData = await res.json().catch(() => ({}));
         if (requestId === fetchSeqRef.current) {
           setSessions([]);
@@ -166,6 +167,7 @@ function SessionListContent() {
         cache: 'no-store',
       });
       if (res.status === 401) {
+        markAuthExpired();
         throw new Error('LINE 登入憑證未通過驗證，請重新登入後再查看球友名單（HTTP 401）');
       }
       if (!res.ok) {
@@ -238,6 +240,7 @@ function SessionListContent() {
         }),
       });
 
+      if (res.status === 401) markAuthExpired();
       const data = await res.json();
       if (!res.ok) {
         throw new Error(data.error || '報名失敗');
