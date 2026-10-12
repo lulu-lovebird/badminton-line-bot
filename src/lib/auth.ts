@@ -24,9 +24,41 @@ export function isSuperAdmin(lineUserId?: string | null): boolean {
   return envAdmins.includes(lineUserId);
 }
 
+type AuthRejectionReason = 'expired' | 'channel_mismatch' | 'invalid_token' | 'other';
+
+function classifyLineAuthError(payload: unknown): AuthRejectionReason {
+  if (typeof payload !== 'object' || payload === null) return 'other';
+  const description = 'error_description' in payload && typeof payload.error_description === 'string'
+    ? payload.error_description.toLowerCase()
+    : '';
+  const error = 'error' in payload && typeof payload.error === 'string' ? payload.error.toLowerCase() : '';
+  if (/expired|expiration|expiry/.test(description)) return 'expired';
+  if (
+    /(?:audience|aud|client_id|client id|channel).*(?:mismatch|does not match|not match|invalid|incorrect)/.test(description) ||
+    /(?:invalid|incorrect|mismatched).*(?:audience|client_id|client id|channel)/.test(description)
+  ) return 'channel_mismatch';
+  if (error === 'invalid_token' || /(?:invalid|malformed|revoked).*token|token.*(?:invalid|malformed|revoked)|signature/.test(description)) {
+    return 'invalid_token';
+  }
+  return 'other';
+}
+
+async function logAuthRejection(stage: string, response: Response): Promise<void> {
+  const debug = (process.env.DEBUG || process.env.NEXT_PUBLIC_DEBUG || 'off').trim().toLowerCase();
+  if (process.env.VERCEL_ENV !== 'preview' || debug !== 'on') return;
+  let reason: AuthRejectionReason = 'other';
+  try {
+    const payload: unknown = await response.json();
+    reason = classifyLineAuthError(payload);
+  } catch {
+    // 不記錄非 JSON 回應或解析錯誤內容，以免洩漏憑證。
+  }
+  logAuthDiagnostic(stage, { httpStatus: response.status, reason });
+}
+
 function logAuthDiagnostic(
   stage: string,
-  details: { httpStatus?: number; channelMatches?: boolean; identityPresent?: boolean; unexpired?: boolean } = {}
+  details: { httpStatus?: number; channelMatches?: boolean; identityPresent?: boolean; unexpired?: boolean; reason?: AuthRejectionReason } = {}
 ): void {
   const debug = (process.env.DEBUG || process.env.NEXT_PUBLIC_DEBUG || 'off').trim().toLowerCase();
   if (process.env.VERCEL_ENV !== 'preview' || debug !== 'on') return;
@@ -64,6 +96,7 @@ export async function verifyLineIdToken(idToken: string): Promise<LineTokenVerif
     });
 
     logAuthDiagnostic('id_token_verify_response', { httpStatus: res.status });
+    if (!res.ok) await logAuthRejection('id_token_rejection_reason', res);
     if (res.ok) {
       const data: LineTokenVerifyResponse = await res.json();
       logAuthDiagnostic('id_token_claims', {
@@ -84,6 +117,7 @@ export async function verifyLineIdToken(idToken: string): Promise<LineTokenVerif
       `https://api.line.me/oauth2/v2.1/verify?access_token=${encodeURIComponent(idToken)}`
     );
     logAuthDiagnostic('access_token_verify_response', { httpStatus: verifyRes.status });
+    if (!verifyRes.ok) await logAuthRejection('access_token_rejection_reason', verifyRes);
     if (verifyRes.ok) {
       const verifyData = await verifyRes.json();
       logAuthDiagnostic('access_token_claims', {
@@ -95,6 +129,7 @@ export async function verifyLineIdToken(idToken: string): Promise<LineTokenVerif
           headers: { Authorization: `Bearer ${idToken}` },
         });
         logAuthDiagnostic('profile_response', { httpStatus: profileRes.status });
+        if (!profileRes.ok) await logAuthRejection('profile_rejection_reason', profileRes);
         if (profileRes.ok) {
           const profileData = await profileRes.json();
           logAuthDiagnostic('profile_identity', { identityPresent: Boolean(profileData.userId) });
