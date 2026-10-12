@@ -158,7 +158,19 @@ function SessionListContent() {
         cache: 'no-store',
       });
       if (!res.ok) {
-        throw new Error('無法載入名單');
+        let reason = '無法載入名單';
+        try {
+          const payload: unknown = await res.json();
+          if (
+            typeof payload === 'object' && payload !== null &&
+            'error' in payload && typeof payload.error === 'string'
+          ) {
+            reason = payload.error;
+          }
+        } catch {
+          // 非 JSON 回應仍提供狀態碼，避免掩蓋伺服器或部署錯誤。
+        }
+        throw new Error(`${reason}（HTTP ${res.status}）`);
       }
       const data = await res.json();
       setRosterData((prev) => ({
