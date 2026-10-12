@@ -72,12 +72,19 @@ export function getRegularInviteLiffUrl(groupId: string, groupName?: string, lif
  * 產生開團排版文案（供團主一鍵複製至 LINE 群組或社群）
  */
 export function formatSessionAnnouncement(session: MatchSession, liffBaseUrl?: string, token?: string | null): string {
+  return formatAnnouncementWithUrl(session, getSessionLiffUrl(session, liffBaseUrl, token));
+}
+
+/** 完整社群文案，使用網站的外部瀏覽器報名入口。 */
+export function formatExternalSessionAnnouncement(session: MatchSession, websiteOrigin: string, token: string): string {
+  return formatAnnouncementWithUrl(session, getExternalSessionUrl(session, websiteOrigin, token));
+}
+
+function formatAnnouncementWithUrl(session: MatchSession, registerUrl: string): string {
   const s = formatTaipeiDate(session.start_time);
   const e = formatTaipeiDate(session.end_time);
   const timeStr = `${s.month}/${s.day} (${s.weekday}) ${s.hours}:${s.mins} - ${e.hours}:${e.mins}`;
   const matchTypeStr = session.match_type === 'single' ? '單打' : session.match_type === 'any' ? '不限' : '雙打';
-  const registerUrl = getSessionLiffUrl(session, liffBaseUrl, token);
-
   const lines = [
     `🏸 【${matchTypeStr}零打】${session.title}`,
     `📅 時間：${timeStr}`,

@@ -6,7 +6,7 @@ import { useSearchParams } from 'next/navigation';
 import { PlusCircle, Users, CheckCircle, Clock, Calendar, MapPin, Send, AlertCircle, RefreshCw, ShieldAlert, Key, Copy, Shield, UserPlus, FileText, User, Share2, Pencil, X, Ban, Trash2, Settings, Star, ChevronDown, ChevronUp, UserCheck } from 'lucide-react';
 import { MatchSession, Registration, GroupMembership } from '@/types/database';
 import { initLiff } from '@/lib/liff-client';
-import { getSessionLiffUrl, getExternalSessionUrl, formatSessionAnnouncement, shareSessionViaTargetPicker, getRegularInviteLiffUrl } from '@/lib/share-utils';
+import { getSessionLiffUrl, getExternalSessionUrl, formatSessionAnnouncement, formatExternalSessionAnnouncement, shareSessionViaTargetPicker, getRegularInviteLiffUrl } from '@/lib/share-utils';
 
 // 輔助函式：計算時間順延天數並輸出 datetime-local 格式 (YYYY-MM-DDTHH:mm) - 強制以台灣時區 Asia/Taipei 轉換
 function toDatetimeLocalString(dateStr: string | Date, addDays = 0): string {
@@ -3182,6 +3182,24 @@ function AdminDashboardContent() {
                       className="w-full rounded-2xl border border-blue-200 bg-white px-4 py-3 text-xs font-bold text-blue-700"
                     >
                       複製外部瀏覽器報名連結（測試）
+                    </button>
+                  )}
+
+                  {isOpenChat && (
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        try {
+                          const text = formatExternalSessionAnnouncement(shareModalSession, window.location.origin, joinToken || '');
+                          await navigator.clipboard.writeText(text);
+                          setCopyToast('✓ 已複製完整揪團文案（外部瀏覽器報名），可直接貼至社群');
+                        } catch {
+                          setCopyToast('無法複製外部報名文案，請確認社群憑證及剪貼簿權限');
+                        }
+                      }}
+                      className="w-full rounded-2xl border border-blue-200 bg-white px-4 py-3 text-xs font-bold text-blue-700"
+                    >
+                      複製完整文案（外部瀏覽器報名）
                     </button>
                   )}
 
