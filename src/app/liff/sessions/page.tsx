@@ -5,6 +5,7 @@ import { useSearchParams } from 'next/navigation';
 import { Calendar, MapPin, DollarSign, Award, CheckCircle, AlertCircle, Clock, RefreshCw, Globe, User, Users } from 'lucide-react';
 import { MatchSession } from '@/types/database';
 import { useLiff } from '@/components/liff-provider';
+import { initLiff, getLiffToken } from '@/lib/liff-client';
 
 interface RosterItem {
   id: string;
@@ -148,15 +149,25 @@ function SessionListContent() {
     }));
 
     try {
+      const sdk = await initLiff();
+      const currentToken = sdk ? (sdk.isLoggedIn() ? getLiffToken(sdk) : '') : idToken;
       const headers: Record<string, string> = {};
-      if (idToken) headers['Authorization'] = `Bearer ${idToken}`;
-      else if (userProfile?.userId) headers['x-test-user-id'] = userProfile.userId;
+      if (currentToken) {
+        headers['Authorization'] = `Bearer ${currentToken}`;
+      } else if (process.env.NODE_ENV !== 'production' && !isExternalEntry && userProfile?.userId) {
+        headers['x-test-user-id'] = userProfile.userId;
+      } else {
+        throw new Error('無法取得登入憑證，請重新登入 LINE 後再查看球友名單');
+      }
 
       const tokenQuery = tokenParam ? `&token=${encodeURIComponent(tokenParam)}` : '';
       const res = await fetch(`/api/registrations?sessionId=${sessionId}${tokenQuery}`, {
         headers,
         cache: 'no-store',
       });
+      if (res.status === 401) {
+        throw new Error('LINE 登入憑證未通過驗證，請重新登入後再查看球友名單（HTTP 401）');
+      }
       if (!res.ok) {
         let reason = '無法載入名單';
         try {
